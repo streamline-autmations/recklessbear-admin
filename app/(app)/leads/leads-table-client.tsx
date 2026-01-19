@@ -18,7 +18,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/status-badge";
+import { X } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -34,14 +36,21 @@ interface Lead {
   created_at: string;
 }
 
-interface LeadsTableClientProps {
-  initialLeads: Lead[];
+interface Rep {
+  user_id: string;
+  full_name: string | null;
 }
 
-export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
+interface LeadsTableClientProps {
+  initialLeads: Lead[];
+  reps: Rep[];
+}
+
+export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
+  const [assignedRepFilter, setAssignedRepFilter] = useState<string>("all");
 
   // Get unique values for filters
   const statuses = useMemo(() => {
@@ -86,8 +95,26 @@ export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
       filtered = filtered.filter((lead) => lead.lead_type === leadTypeFilter);
     }
 
+    // Assigned rep filter
+    if (assignedRepFilter !== "all") {
+      if (assignedRepFilter === "unassigned") {
+        filtered = filtered.filter((lead) => !lead.assigned_rep_id);
+      } else {
+        filtered = filtered.filter((lead) => lead.assigned_rep_id === assignedRepFilter);
+      }
+    }
+
     return filtered;
-  }, [initialLeads, searchQuery, statusFilter, leadTypeFilter]);
+  }, [initialLeads, searchQuery, statusFilter, leadTypeFilter, assignedRepFilter]);
+
+  function clearFilters() {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setLeadTypeFilter("all");
+    setAssignedRepFilter("all");
+  }
+
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || leadTypeFilter !== "all" || assignedRepFilter !== "all";
 
   const formatDate = (dateString: string) => {
     try {
@@ -103,42 +130,70 @@ export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Input
-          type="search"
-          placeholder="Search by name, email, phone, or lead ID..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="min-h-[44px] flex-1"
-        />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {statuses.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {leadTypes.length > 0 && (
-          <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <Input
+            type="search"
+            placeholder="Search by name, email, phone, or lead ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="min-h-[44px] flex-1 min-w-[200px]"
+          />
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-              <SelectValue placeholder="Lead Type" />
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              {leadTypes.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
+              <SelectItem value="all">All Statuses</SelectItem>
+              {statuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        )}
+          {leadTypes.length > 0 && (
+            <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
+              <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
+                <SelectValue placeholder="Lead Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {leadTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {reps.length > 0 && (
+            <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter}>
+              <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
+                <SelectValue placeholder="Assigned Rep" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reps</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {reps.map((rep) => (
+                  <SelectItem key={rep.user_id} value={rep.user_id}>
+                    {rep.full_name || rep.user_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              onClick={clearFilters}
+              className="min-h-[44px] gap-2"
+            >
+              <X className="h-4 w-4" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Responsive table wrapper - horizontal scroll on mobile */}
@@ -149,18 +204,18 @@ export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
               <TableRow>
                 <TableHead>Lead ID</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Email</TableHead>
-                <TableHead>Phone</TableHead>
+                <TableHead className="hidden sm:table-cell">Lead Type</TableHead>
                 <TableHead className="hidden md:table-cell">Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Assigned Rep</TableHead>
                 <TableHead className="hidden lg:table-cell">Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLeads.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    {searchQuery || statusFilter !== "all" || leadTypeFilter !== "all"
+                    {hasActiveFilters
                       ? "No leads found matching your filters."
                       : "No leads yet."}
                   </TableCell>
@@ -180,10 +235,13 @@ export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
                       {lead.name || <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      {lead.email || <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      {lead.phone || <span className="text-muted-foreground">—</span>}
+                      {lead.lead_type ? (
+                        <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
+                          {lead.lead_type}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <StatusBadge 
@@ -198,6 +256,16 @@ export function LeadsTableClient({ initialLeads }: LeadsTableClientProps) {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">
                       {formatDate(lead.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="min-h-[44px]"
+                      >
+                        <Link href={`/leads/${lead.id}`}>View</Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

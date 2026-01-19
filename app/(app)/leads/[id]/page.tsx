@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { LeadDetailClient } from "./lead-detail-client";
@@ -16,6 +15,13 @@ interface Lead {
   phone: string | null;
   organization: string | null;
   status: string;
+  lead_type: string | null;
+  source: string | null;
+  question_data: Record<string, unknown> | null;
+  quote_data: Record<string, unknown> | null;
+  booking_data: Record<string, unknown> | null;
+  assigned_rep_id: string | null;
+  assigned_rep_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,7 +90,7 @@ async function getLead(id: string): Promise<Lead | null> {
 
   const { data, error } = await supabase
     .from("leads")
-    .select("id, lead_id, name, email, phone, organization, status, created_at, updated_at")
+    .select("id, lead_id, name, email, phone, organization, status, lead_type, source, question_data, quote_data, booking_data, assigned_rep_id, created_at, updated_at")
     .eq("id", id)
     .single();
 
@@ -92,7 +98,24 @@ async function getLead(id: string): Promise<Lead | null> {
     return null;
   }
 
-  return data;
+  // Fetch assigned rep name if assigned
+  let assignedRepName: string | null = null;
+  if (data.assigned_rep_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", data.assigned_rep_id)
+      .single();
+    assignedRepName = profile?.full_name || null;
+  }
+
+  return {
+    ...data,
+    question_data: data.question_data || null,
+    quote_data: data.quote_data || null,
+    booking_data: data.booking_data || null,
+    assigned_rep_name: assignedRepName,
+  };
 }
 
 function getLastActivity(notes: Note[], events: Event[], updatedAt: string): string {
@@ -161,89 +184,42 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   }
 
   const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
-  const lastActivity = getLastActivity(notes, events, lead.updated_at);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Lead Detail</h1>
-        <p className="text-muted-foreground">
-          View and manage lead information.
-        </p>
+      {/* Header Section */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">
+              {lead.name || "Unnamed Lead"}
+            </h1>
+            <span className="text-lg text-muted-foreground">({lead.lead_id})</span>
+          </div>
+          {lead.lead_type && (
+            <span className="inline-flex w-fit items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
+              {lead.lead_type}
+            </span>
+          )}
+        </div>
+        <LeadQuickActions
+          phone={lead.phone}
+          email={lead.email}
+          leadId={lead.lead_id}
+          name={lead.name}
+        />
       </div>
 
-      {/* Lead Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lead {lead.lead_id}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Quick Actions */}
-          <LeadQuickActions
-            phone={lead.phone}
-            email={lead.email}
-            leadId={lead.lead_id}
-            name={lead.name}
-          />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="text-sm font-medium">Name</p>
-              <p className="text-sm text-muted-foreground">{lead.name || "—"}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Organization</p>
-              <p className="text-sm text-muted-foreground">{lead.organization || "—"}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Email</p>
-              <p className="text-sm text-muted-foreground">{lead.email || "—"}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Phone</p>
-              <p className="text-sm text-muted-foreground">{lead.phone || "—"}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Status</p>
-              <p className="text-sm text-muted-foreground">{lead.status}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Last Activity</p>
-              <p className="text-sm text-muted-foreground">
-                {new Date(lastActivity).toLocaleString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Client Component for Actions and Display */}
+      {/* Client Component with Header Actions and Tabs */}
       <LeadDetailClient
         leadId={id}
+        lead={lead}
         initialStatus={lead.status}
         notes={notes}
         events={events}
         isCeoOrAdmin={isCeoOrAdmin}
         reps={reps}
       />
-
-      {/* Attachments Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Attachments</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No attachments yet. Attachment URLs can be added here when available.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

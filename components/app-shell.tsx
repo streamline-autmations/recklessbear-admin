@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Settings, List, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 
 const navigation = [
@@ -80,26 +80,28 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
         </aside>
       </div>
 
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" className="fixed bottom-6 right-6 z-50 md:hidden">
-            <List className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent className="w-64 p-4" side="left">
-          <SheetHeader>
-            <SheetTitle>Navigate</SheetTitle>
-          </SheetHeader>
-          <Separator className="my-2" />
-          {renderNav(true)}
-        </SheetContent>
-      </Sheet>
-
       <div className="md:ml-72">
         <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
-          <div>
-            <p className="text-sm text-muted-foreground">RecklessBear Admin</p>
-            <p className="text-xl font-semibold text-foreground">Light CRM</p>
+          <div className="flex items-center gap-3">
+            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden min-h-[44px] min-w-[44px]">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-64 p-4" side="left">
+                <SheetHeader>
+                  <SheetTitle>Navigate</SheetTitle>
+                </SheetHeader>
+                <Separator className="my-2" />
+                {renderNav(true)}
+              </SheetContent>
+            </Sheet>
+            <div>
+              <p className="text-sm text-muted-foreground">RecklessBear Admin</p>
+              <p className="text-xl font-semibold text-foreground">Light CRM</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <DropdownMenu>

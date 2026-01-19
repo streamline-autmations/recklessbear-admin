@@ -30,6 +30,27 @@ async function getCurrentUserRole(): Promise<string | null> {
   return data?.role || null;
 }
 
+interface Rep {
+  user_id: string;
+  full_name: string | null;
+}
+
+async function getReps(): Promise<Rep[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, full_name")
+    .eq("role", "rep")
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching reps:", error);
+    return [];
+  }
+
+  return data || [];
+}
+
 async function getLeads(): Promise<Lead[]> {
   const supabase = await createClient();
 
@@ -112,7 +133,7 @@ async function getLeads(): Promise<Lead[]> {
 }
 
 export default async function LeadsPage() {
-  const leads = await getLeads();
+  const [leads, reps] = await Promise.all([getLeads(), getReps()]);
 
   return (
     <div className="space-y-6">
@@ -125,7 +146,7 @@ export default async function LeadsPage() {
           <CardTitle>Leads List</CardTitle>
         </CardHeader>
         <CardContent>
-          <LeadsTableClient initialLeads={leads} />
+          <LeadsTableClient initialLeads={leads} reps={reps} />
         </CardContent>
       </Card>
     </div>
