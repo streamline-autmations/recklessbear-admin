@@ -21,7 +21,7 @@ const statuses: LeadStatus[] = [
 
 export default function KitchenSinkPage() {
   return (
-    <div className="min-h-screen bg-[rgb(var(--background)/1)] py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="mx-auto w-full max-w-6xl space-y-8 px-4">
         <Card>
           <CardHeader>
@@ -47,13 +47,13 @@ export default function KitchenSinkPage() {
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-[rgb(var(--muted)/1)]">
+              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-muted">
                 Primary
               </span>
-              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-[rgb(var(--success)/0.2)]">
+              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-green-50 text-green-900">
                 Success
               </span>
-              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-[rgb(var(--warning)/0.2)]">
+              <span className="rounded-full border border-border px-3 py-[2px] text-xs font-semibold uppercase tracking-[0.2em] bg-amber-50 text-amber-900">
                 Warning
               </span>
             </div>
@@ -103,7 +103,7 @@ export default function KitchenSinkPage() {
           <CardContent>
             <div className="overflow-hidden rounded-xl border border-border">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[rgb(var(--background)/1)] uppercase tracking-wider text-[rgb(var(--muted-foreground)/1)]">
+                <thead className="bg-background uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Lead ID</th>
                     <th className="px-4 py-3">Name</th>
@@ -113,7 +113,7 @@ export default function KitchenSinkPage() {
                 </thead>
                 <tbody>
                   {["new", "quote_approved", "lost"].map((status) => (
-                    <tr key={status} className="border-t border-border hover:bg-[rgb(var(--card)/1)]">
+                    <tr key={status} className="border-t border-border hover:bg-card">
                       <td className="px-4 py-3">RB-000{status.length}</td>
                       <td className="px-4 py-3">Lead {status}</td>
                       <td className="px-4 py-3">
@@ -133,14 +133,14 @@ export default function KitchenSinkPage() {
             <CardTitle>Dialog / Toast Previews</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-xl border border-border bg-[rgb(var(--card)/1)] p-4 shadow-sm">
-              <p className="text-sm font-semibold text-[rgb(var(--foreground)/1)]">Dialog Preview</p>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-sm font-semibold text-foreground">Dialog Preview</p>
               <p className="text-muted-foreground">
                 Confirm deletion (modal would overlay this area). Buttons could hook into server actions.
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-[rgb(var(--background)/1)] p-3">
-              <p className="text-sm font-medium text-[rgb(var(--foreground)/1)]">Toast preview:</p>
+            <div className="rounded-xl border border-border bg-background p-3">
+              <p className="text-sm font-medium text-foreground">Toast preview:</p>
               <p className="text-sm text-muted-foreground">
                 Lead saved successfully. (Toast would slide in from bottom right.)
               </p>

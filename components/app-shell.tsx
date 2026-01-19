@@ -43,8 +43,8 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
             href={item.href}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
               isActive
-                ? "bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--foreground)/1)]"
-                : "text-muted-foreground hover:bg-[rgb(var(--border)/1)] hover:text-[rgb(var(--foreground)/1)]"
+                ? "bg-primary/10 text-foreground"
+                : "text-muted-foreground hover:bg-border hover:text-foreground"
             }`}
           >
             <item.icon className="h-4 w-4" />
@@ -56,10 +56,10 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   );
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--background)/1)] text-[rgb(var(--foreground)/1)]">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="hidden md:flex">
-        <aside className="w-72 border-r border-border bg-[rgb(var(--card)/1)] p-4">
-          <div className="mb-6 text-lg font-semibold text-[rgb(var(--foreground)/1)]">
+        <aside className="w-72 border-r border-border bg-card p-4">
+          <div className="mb-6 text-lg font-semibold text-foreground">
             RecklessBear
           </div>
           <Separator className="mb-4" />
@@ -83,23 +83,23 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
       </Sheet>
 
       <div className="md:ml-72">
-        <header className="flex items-center justify-between border-b border-border bg-[rgb(var(--card)/1)] px-4 py-3">
+        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
           <div>
             <p className="text-sm text-muted-foreground">RecklessBear Admin</p>
-            <p className="text-xl font-semibold text-[rgb(var(--foreground)/1)]">Light CRM</p>
+            <p className="text-xl font-semibold text-foreground">Light CRM</p>
           </div>
           <div className="flex items-center gap-3">
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2 px-3 py-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[rgb(var(--foreground)/1)]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground">
                   {userName.charAt(0)}
                 </div>
                 <span className="text-sm font-medium">{userName}</span>
               </Button>
             </DropdownMenuTrigger>
                 <DropdownMenuContent side="bottom" align="end">
-                  <DropdownMenuItem className="text-[rgb(var(--foreground)/1)]">
+                  <DropdownMenuItem className="text-foreground">
                     Role: {userRole}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -113,7 +113,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
           </div>
         </header>
 
-        <main className="bg-[rgb(var(--background)/1)] p-4 md:p-6">
+        <main className="bg-background p-4 md:p-6">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>

@@ -16,14 +16,38 @@ const statusStyles: Record<
   LeadStatus,
   { label: string; className: string }
 > = {
-  new: { label: "New", className: "bg-[rgb(var(--background)/1)] text-[rgb(var(--foreground)/1)] border border-border" },
-  assigned: { label: "Assigned", className: "bg-[rgb(var(--muted)/1)] text-[rgb(var(--foreground)/1)] border border-border" },
-  contacted: { label: "Contacted", className: "bg-[rgb(var(--warning)/0.1)] text-[rgb(var(--foreground)/1)] border border-border" },
-  quote_sent: { label: "Quote Sent", className: "bg-[rgb(var(--muted)/0.8)] text-[rgb(var(--foreground)/1)] border border-border" },
-  quote_approved: { label: "Quote Approved", className: "bg-[rgb(var(--success)/0.1)] text-[rgb(var(--foreground)/1)] border border-border" },
-  in_production: { label: "In Production", className: "bg-[rgb(var(--muted)/0.8)] text-[rgb(var(--foreground)/1)] border border-border" },
-  completed: { label: "Completed", className: "bg-[rgb(var(--success)/0.2)] text-[rgb(var(--foreground)/1)] border border-border" },
-  lost: { label: "Lost", className: "bg-[rgb(var(--destructive)/0.15)] text-[rgb(var(--foreground)/1)] border border-border" },
+  new: {
+    label: "New",
+    className: "bg-background text-foreground border border-border",
+  },
+  assigned: {
+    label: "Assigned",
+    className: "bg-muted text-foreground border border-border",
+  },
+  contacted: {
+    label: "Contacted",
+    className: "bg-amber-50 text-amber-900 border border-amber-200",
+  },
+  quote_sent: {
+    label: "Quote Sent",
+    className: "bg-indigo-50 text-indigo-900 border border-indigo-200",
+  },
+  quote_approved: {
+    label: "Quote Approved",
+    className: "bg-green-50 text-green-900 border border-green-200",
+  },
+  in_production: {
+    label: "In Production",
+    className: "bg-blue-50 text-blue-900 border border-blue-200",
+  },
+  completed: {
+    label: "Completed",
+    className: "bg-green-50 text-green-900 border border-green-200",
+  },
+  lost: {
+    label: "Lost",
+    className: "bg-red-50 text-red-900 border border-red-200",
+  },
 };
 
 export function StatusBadge({ status }: { status: LeadStatus }) {
