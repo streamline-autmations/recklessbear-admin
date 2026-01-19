@@ -1,25 +1,28 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
+﻿import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClient } from '@/lib/supabase/server';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 async function getCurrentUserRole(): Promise<string | null> {
   const supabase = await createClient();
 
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
     return null;
   }
 
-  const { data, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, user_id")
-    .eq("user_id", user.id)
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role, user_id')
+    .eq('user_id', user.id)
     .single();
+
+  if (error) {
+    console.error('Profile lookup error:', error);
+  }
 
   return data?.role || null;
 }
@@ -28,12 +31,12 @@ async function getRepLeadsCount(userId: string): Promise<number> {
   const supabase = await createClient();
 
   const { count, error } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true })
-    .eq("assigned_rep_id", userId);
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .eq('assigned_rep_id', userId);
 
   if (error) {
-    console.error("Error fetching rep leads count:", error);
+    console.error('Error fetching rep leads count:', error);
     return 0;
   }
 
@@ -44,11 +47,11 @@ async function getTotalLeads(): Promise<number> {
   const supabase = await createClient();
 
   const { count, error } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true });
+    .from('leads')
+    .select('*', { count: 'exact', head: true });
 
   if (error) {
-    console.error("Error fetching total leads:", error);
+    console.error('Error fetching total leads:', error);
     return 0;
   }
 
@@ -62,12 +65,12 @@ async function getLeadsLast7Days(): Promise<number> {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   const { count, error } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true })
-    .gte("created_at", sevenDaysAgo.toISOString());
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', sevenDaysAgo.toISOString());
 
   if (error) {
-    console.error("Error fetching leads last 7 days:", error);
+    console.error('Error fetching leads last 7 days:', error);
     return 0;
   }
 
@@ -78,12 +81,12 @@ async function getUnassignedLeads(): Promise<number> {
   const supabase = await createClient();
 
   const { count, error } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true })
-    .is("assigned_rep_id", null);
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .is('assigned_rep_id', null);
 
   if (error) {
-    console.error("Error fetching unassigned leads:", error);
+    console.error('Error fetching unassigned leads:', error);
     return 0;
   }
 
@@ -94,17 +97,17 @@ async function getLeadsByStatus(): Promise<Record<string, number>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("leads")
-    .select("status");
+    .from('leads')
+    .select('status');
 
   if (error) {
-    console.error("Error fetching leads by status:", error);
+    console.error('Error fetching leads by status:', error);
     return {};
   }
 
   const counts: Record<string, number> = {};
   data?.forEach((lead) => {
-    const status = lead.status || "Unknown";
+    const status = lead.status || 'Unknown';
     counts[status] = (counts[status] || 0) + 1;
   });
 
@@ -118,13 +121,13 @@ async function getStaleLeads(): Promise<number> {
   fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
 
   const { count, error } = await supabase
-    .from("leads")
-    .select("*", { count: "exact", head: true })
-    .lt("updated_at", fortyEightHoursAgo.toISOString())
-    .neq("status", "Quote Approved");
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .lt('updated_at', fortyEightHoursAgo.toISOString())
+    .neq('status', 'Quote Approved');
 
   if (error) {
-    console.error("Error fetching stale leads:", error);
+    console.error('Error fetching stale leads:', error);
     return 0;
   }
 
@@ -134,7 +137,7 @@ async function getStaleLeads(): Promise<number> {
 export default async function DashboardPage() {
   const userRole = await getCurrentUserRole();
 
-  if (userRole === "rep") {
+  if (userRole === 'rep') {
     const supabase = await createClient();
     const {
       data: { user },
@@ -146,9 +149,7 @@ export default async function DashboardPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            My leads summary
-          </p>
+          <p className="text-muted-foreground">My leads summary</p>
         </div>
         <Card>
           <CardHeader>
@@ -157,9 +158,7 @@ export default async function DashboardPage() {
           <CardContent className="space-y-4">
             <div>
               <div className="text-3xl font-bold">{myLeadsCount}</div>
-              <p className="text-sm text-muted-foreground">
-                Leads assigned to me
-              </p>
+              <p className="text-sm text-muted-foreground">Leads assigned to me</p>
             </div>
             <Button asChild className="min-h-[44px]">
               <Link href="/leads">View All Leads</Link>
@@ -170,7 +169,6 @@ export default async function DashboardPage() {
     );
   }
 
-  // CEO/Admin view
   const [
     totalLeads,
     leadsLast7Days,
@@ -189,12 +187,8 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Overview and statistics
-        </p>
+        <p className="text-muted-foreground">Overview and statistics</p>
       </div>
-
-      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -233,8 +227,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Leads by Status */}
       <Card>
         <CardHeader>
           <CardTitle>Leads by Status</CardTitle>
