@@ -9,7 +9,25 @@ interface Lead {
   email: string | null;
   phone: string | null;
   status: string;
+  lead_type: string | null;
+  source: string | null;
+  assigned_rep_id: string | null;
+  assigned_rep_name: string | null;
   created_at: string;
+}
+
+async function getCurrentUserRole(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  return data?.role || null;
 }
 
 async function getLeads(): Promise<Lead[]> {
@@ -24,20 +42,30 @@ async function getLeads(): Promise<Lead[]> {
     return [];
   }
 
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single();
+  const userRole = await getCurrentUserRole();
 
-  if (profileError) {
-    console.error('Profile error (user may not have a profile - RLS may block access):', profileError);
-  }
-
-  const { data, error } = await supabase
+  // Build query - RLS will handle filtering for reps
+  // Fetch leads with assigned rep info
+  let query = supabase
     .from('leads')
-    .select('id, lead_id, name, email, phone, status, created_at')
+    .select(`
+      id, 
+      lead_id, 
+      name, 
+      email, 
+      phone, 
+      status, 
+      lead_type,
+      source,
+      assigned_rep_id,
+      created_at
+    `)
     .order('created_at', { ascending: false });
+  
+  // RLS will automatically filter for reps, but we can be explicit if needed
+  // For reps, RLS policy should already filter to assigned_rep_id = auth.uid()
+  
+  const { data: leadsData, error } = await query;
 
   if (error) {
     console.error('Error fetching leads:', {
@@ -49,7 +77,38 @@ async function getLeads(): Promise<Lead[]> {
     return [];
   }
 
-  return data || [];
+  // Fetch rep names for assigned reps
+  const repIds = [...new Set((leadsData || []).map((lead: any) => lead.assigned_rep_id).filter(Boolean))];
+  let repNames: Record<string, string | null> = {};
+  
+  if (repIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name')
+      .in('user_id', repIds);
+    
+    if (profiles) {
+      repNames = profiles.reduce((acc: Record<string, string | null>, profile: any) => {
+        acc[profile.user_id] = profile.full_name;
+        return acc;
+      }, {});
+    }
+  }
+
+  // Transform the data to include rep names
+  return (leadsData || []).map((lead: any) => ({
+    id: lead.id,
+    lead_id: lead.lead_id,
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    status: lead.status,
+    lead_type: lead.lead_type,
+    source: lead.source,
+    assigned_rep_id: lead.assigned_rep_id,
+    assigned_rep_name: lead.assigned_rep_id ? (repNames[lead.assigned_rep_id] || null) : null,
+    created_at: lead.created_at,
+  }));
 }
 
 export default async function LeadsPage() {

@@ -33,27 +33,40 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const pathname = usePathname();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-  const renderNav = (mobile?: boolean) => (
-    <nav className={`flex ${mobile ? "flex-col" : "flex-col gap-3"}`}>
-      {navigation.map((item) => {
-        const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
-        return (
-          <Link
-            key={item.name}
-            href={item.href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              isActive
-                ? "bg-primary/10 text-foreground"
-                : "text-muted-foreground hover:bg-border hover:text-foreground"
-            }`}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.name}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  const renderNav = (mobile?: boolean) => {
+    const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
+    const visibleNav = navigation.filter((item) => {
+      if (item.href === "/users" || item.href === "/settings") {
+        return isCeoOrAdmin;
+      }
+      return true;
+    });
+
+    return (
+      <nav className={`flex ${mobile ? "flex-col" : "flex-col gap-3"}`}>
+        {visibleNav.map((item) => {
+          const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={() => {
+                if (mobile) setIsSheetOpen(false);
+              }}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                isActive
+                  ? "bg-primary/10 text-foreground"
+                  : "text-muted-foreground hover:bg-border hover:text-foreground"
+              }`}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.name}
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">

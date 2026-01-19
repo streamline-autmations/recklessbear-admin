@@ -134,6 +134,47 @@ async function getStaleLeads(): Promise<number> {
   return count || 0;
 }
 
+interface RepWorkload {
+  rep_id: string;
+  rep_name: string | null;
+  lead_count: number;
+}
+
+async function getRepWorkload(): Promise<RepWorkload[]> {
+  const supabase = await createClient();
+
+  // Get all reps
+  const { data: reps, error: repsError } = await supabase
+    .from('profiles')
+    .select('user_id, full_name')
+    .eq('role', 'rep');
+
+  if (repsError || !reps) {
+    console.error('Error fetching reps:', repsError);
+    return [];
+  }
+
+  // Get lead counts for each rep
+  const workloads: RepWorkload[] = [];
+  for (const rep of reps) {
+    const { count, error } = await supabase
+      .from('leads')
+      .select('*', { count: 'exact', head: true })
+      .eq('assigned_rep_id', rep.user_id);
+
+    if (!error) {
+      workloads.push({
+        rep_id: rep.user_id,
+        rep_name: rep.full_name,
+        lead_count: count || 0,
+      });
+    }
+  }
+
+  // Sort by lead count descending
+  return workloads.sort((a, b) => b.lead_count - a.lead_count);
+}
+
 export default async function DashboardPage() {
   const userRole = await getCurrentUserRole();
 
@@ -175,12 +216,14 @@ export default async function DashboardPage() {
     unassignedLeads,
     leadsByStatus,
     staleLeads,
+    repWorkload,
   ] = await Promise.all([
     getTotalLeads(),
     getLeadsLast7Days(),
     getUnassignedLeads(),
     getLeadsByStatus(),
     getStaleLeads(),
+    getRepWorkload(),
   ]);
 
   return (
@@ -227,30 +270,56 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Leads by Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {Object.keys(leadsByStatus).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No leads found</p>
-          ) : (
-            <div className="space-y-2">
-              {Object.entries(leadsByStatus)
-                .sort((a, b) => b[1] - a[1])
-                .map(([status, count]) => (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads by Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {Object.keys(leadsByStatus).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No leads found</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(leadsByStatus)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([status, count]) => (
+                    <div
+                      key={status}
+                      className="flex items-center justify-between py-2 border-b last:border-0"
+                    >
+                      <span className="text-sm font-medium">{status}</span>
+                      <span className="text-sm text-muted-foreground">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Rep Workload</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {repWorkload.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No reps found</p>
+            ) : (
+              <div className="space-y-2">
+                {repWorkload.map((rep) => (
                   <div
-                    key={status}
+                    key={rep.rep_id}
                     className="flex items-center justify-between py-2 border-b last:border-0"
                   >
-                    <span className="text-sm font-medium">{status}</span>
-                    <span className="text-sm text-muted-foreground">{count}</span>
+                    <span className="text-sm font-medium">
+                      {rep.rep_name || rep.rep_id.substring(0, 8)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{rep.lead_count} leads</span>
                   </div>
                 ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

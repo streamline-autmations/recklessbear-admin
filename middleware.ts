@@ -58,7 +58,9 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = pathname === "/login";
   // Route group (app) doesn't appear in URL, so check actual routes
   const isProtectedRoute = pathname.startsWith("/dashboard") || 
-                           pathname.startsWith("/leads");
+                           pathname.startsWith("/leads") ||
+                           pathname.startsWith("/users") ||
+                           pathname.startsWith("/settings");
 
   // Handle root route: redirect to /dashboard if logged in, else /login
   if (isRoot) {

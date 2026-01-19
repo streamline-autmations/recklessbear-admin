@@ -12,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { addNoteAction, changeStatusAction, assignRepAction } from "./actions";
 
 interface Note {
@@ -53,6 +55,7 @@ export function LeadDetailClient({
   isCeoOrAdmin,
   reps,
 }: LeadDetailClientProps) {
+  const router = useRouter();
   const [noteText, setNoteText] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(initialStatus);
   const [selectedRepId, setSelectedRepId] = useState<string>("");
@@ -93,9 +96,11 @@ export function LeadDetailClient({
       const result = await addNoteAction(formData);
       if (result && "error" in result) {
         setNoteError(result.error);
+        toast.error(result.error);
       } else {
         setNoteText("");
-        // Page will revalidate
+        toast.success("Note added successfully");
+        router.refresh();
       }
     });
   }
@@ -110,10 +115,12 @@ export function LeadDetailClient({
       const result = await changeStatusAction(formData);
       if (result && "error" in result) {
         setStatusError(result.error);
-        // Revert status on error
         setSelectedStatus(initialStatus);
+        toast.error(result.error);
+      } else {
+        toast.success("Status updated successfully");
+        router.refresh();
       }
-      // Page will revalidate
     });
   }
 
@@ -125,9 +132,11 @@ export function LeadDetailClient({
       const result = await assignRepAction(formData);
       if (result && "error" in result) {
         setRepError(result.error);
+        toast.error(result.error);
       } else {
         setSelectedRepId("");
-        // Page will revalidate
+        toast.success("Rep assigned successfully");
+        router.refresh();
       }
     });
   }

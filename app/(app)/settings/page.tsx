@@ -1,9 +1,7 @@
 ﻿import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { saveSettingsAction } from './actions';
+import { SettingsForm } from './settings-form';
 
 interface SettingsPayload {
   whatsappAlertsEnabled: boolean;
@@ -61,42 +59,11 @@ export default async function SettingsPage() {
           <CardTitle>Alert toggles</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={saveSettingsAction} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="whatsappAlertsEnabled">WhatsApp Alerts</Label>
-              <label className="flex items-center gap-3">
-                <input
-                  id="whatsappAlertsEnabled"
-                  name="whatsappAlertsEnabled"
-                  type="checkbox"
-                  defaultChecked={payload.whatsappAlertsEnabled}
-                  className="h-5 w-5 rounded border border-border bg-background text-primary focus:outline-none"
-                />
-                <span className="text-sm text-muted-foreground">Notify via WhatsApp when leads update</span>
-              </label>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="emailAlertsEnabled">Email Alerts</Label>
-              <label className="flex items-center gap-3">
-                <input
-                  id="emailAlertsEnabled"
-                  name="emailAlertsEnabled"
-                  type="checkbox"
-                  defaultChecked={payload.emailAlertsEnabled}
-                  className="h-5 w-5 rounded border border-border bg-background text-primary focus:outline-none"
-                />
-                <span className="text-sm text-muted-foreground">Send email updates for important changes</span>
-              </label>
-            </div>
-            {updatedAt && (
-              <p className="text-xs text-muted-foreground">
-                Last saved {new Date(updatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-              </p>
-            )}
-            <Button type="submit" className="min-h-[44px]">
-              Save settings
-            </Button>
-          </form>
+          <SettingsForm
+            initialWhatsapp={payload.whatsappAlertsEnabled}
+            initialEmail={payload.emailAlertsEnabled}
+            updatedAt={updatedAt}
+          />
         </CardContent>
       </Card>
     </div>

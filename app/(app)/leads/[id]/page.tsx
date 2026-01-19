@@ -232,6 +232,18 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         isCeoOrAdmin={isCeoOrAdmin}
         reps={reps}
       />
+
+      {/* Attachments Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Attachments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            No attachments yet. Attachment URLs can be added here when available.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
