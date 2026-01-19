@@ -1,41 +1,32 @@
-"use client";
+"use server";
 
-import { useState } from "react";
-import { Sidebar } from "@/components/sidebar";
-import { Topbar } from "@/components/topbar";
-import {
-  Sheet,
-  SheetContent,
-} from "@/components/ui/sheet";
+import AppShell from "@/components/app-shell";
+import { createClient } from "@/lib/supabase/server";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("full_name, role")
+        .eq("user_id", user.id)
+        .single()
+    : { data: null };
+
+  const userName = profile?.full_name || user?.email || "RecklessBear";
+  const userRole = profile?.role || "team";
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden">
-      <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} />
-      <div className="flex flex-1 overflow-hidden">
-        {/* Desktop Sidebar - visible on md and up */}
-        <aside className="hidden w-64 border-r bg-background md:block">
-          <Sidebar />
-        </aside>
-
-        {/* Mobile Drawer */}
-        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetContent side="left" className="w-64 p-0">
-            <Sidebar onLinkClick={() => setIsMobileMenuOpen(false)} />
-          </SheetContent>
-        </Sheet>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-4 md:p-6">{children}</div>
-        </main>
-      </div>
-    </div>
+    <AppShell userName={userName} userRole={userRole}>
+      {children}
+    </AppShell>
   );
 }
