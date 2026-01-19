@@ -22,18 +22,21 @@ import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/status-badge";
 import { X } from "lucide-react";
 
-interface Lead {
-  id: string;
+import type { Lead } from '@/types/leads';
+
+interface DisplayLead extends Lead {
+  id?: string;
   lead_id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  status: string;
-  lead_type: string | null;
-  source: string | null;
-  assigned_rep_id: string | null;
-  assigned_rep_name: string | null;
-  created_at: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  status?: string | null;
+  lead_type?: string | null;
+  source?: string | null;
+  assigned_rep_id?: string | null;
+  assigned_rep_name?: string | null;
+  created_at?: string | null;
+  submission_date?: string | null;
 }
 
 interface Rep {
@@ -42,7 +45,7 @@ interface Rep {
 }
 
 interface LeadsTableClientProps {
-  initialLeads: Lead[];
+  initialLeads: DisplayLead[];
   reps: Rep[];
 }
 
@@ -54,12 +57,12 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
 
   // Get unique values for filters
   const statuses = useMemo(() => {
-    const unique = new Set(initialLeads.map((lead) => lead.status).filter(Boolean));
+    const unique = new Set(initialLeads.map((lead) => lead.status || "").filter(Boolean));
     return Array.from(unique).sort();
   }, [initialLeads]);
 
   const leadTypes = useMemo(() => {
-    const unique = new Set(initialLeads.map((lead) => lead.lead_type).filter(Boolean));
+    const unique = new Set(initialLeads.map((lead) => lead.lead_type || "").filter(Boolean));
     return Array.from(unique).sort();
   }, [initialLeads]);
 
@@ -87,12 +90,12 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
 
     // Status filter
     if (statusFilter !== "all") {
-      filtered = filtered.filter((lead) => lead.status === statusFilter);
+      filtered = filtered.filter((lead) => (lead.status || "").toLowerCase() === statusFilter.toLowerCase());
     }
 
     // Lead type filter
     if (leadTypeFilter !== "all") {
-      filtered = filtered.filter((lead) => lead.lead_type === leadTypeFilter);
+      filtered = filtered.filter((lead) => (lead.lead_type || "").toLowerCase() === leadTypeFilter.toLowerCase());
     }
 
     // Assigned rep filter
@@ -222,10 +225,10 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
                 </TableRow>
               ) : (
                 filteredLeads.map((lead) => (
-                  <TableRow key={lead.id}>
+                  <TableRow key={lead.id || lead.lead_id}>
                     <TableCell>
                       <Link
-                        href={`/leads/${lead.id}`}
+                        href={`/leads/${lead.lead_id}`}
                         className="font-medium text-primary hover:underline min-h-[44px] flex items-center"
                       >
                         {lead.lead_id}
@@ -246,16 +249,16 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
                     <TableCell className="hidden md:table-cell">
                       <StatusBadge 
                         status={
-                          (lead.status?.toLowerCase().replace(/\s+/g, "_") || "new") as 
+                          ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as 
                           "new" | "assigned" | "contacted" | "quote_sent" | "quote_approved" | "in_production" | "completed" | "lost"
                         } 
                       />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      {lead.assigned_rep_name || <span className="text-muted-foreground">—</span>}
+                      {lead.assigned_rep_name || lead.assigned_rep_id || <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatDate(lead.created_at)}
+                      {formatDate(lead.created_at || lead.submission_date || new Date().toISOString())}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -264,7 +267,7 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
                         size="sm"
                         className="min-h-[44px]"
                       >
-                        <Link href={`/leads/${lead.id}`}>View</Link>
+                        <Link href={`/leads/${lead.lead_id}`}>View</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

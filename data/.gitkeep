@@ -1,0 +1,3 @@
+# Place your leads export file here
+# Supported formats: leads.csv or leads.xlsx
+# The file will be automatically parsed and displayed in the admin app

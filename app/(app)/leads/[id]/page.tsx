@@ -2,28 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { LeadDetailClient } from "./lead-detail-client";
 import { LeadQuickActions } from "./lead-quick-actions";
+import { loadLeadsFromSpreadsheet } from "@/lib/leads/importLeadsFromSpreadsheet";
+import type { Lead } from "@/types/leads";
 
 interface LeadDetailPageProps {
   params: Promise<{ id: string }>;
-}
-
-interface Lead {
-  id: string;
-  lead_id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  organization: string | null;
-  status: string;
-  lead_type: string | null;
-  source: string | null;
-  question_data: Record<string, unknown> | null;
-  quote_data: Record<string, unknown> | null;
-  booking_data: Record<string, unknown> | null;
-  assigned_rep_id: string | null;
-  assigned_rep_name: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 interface Note {
@@ -85,14 +68,60 @@ async function getReps(): Promise<Rep[]> {
   return data || [];
 }
 
+/**
+ * Get lead by ID (from URL param, which could be lead_id or UUID)
+ * Tries spreadsheet first, then falls back to Supabase
+ */
 async function getLead(id: string): Promise<Lead | null> {
+  // Try loading from spreadsheet first (search by lead_id)
+  try {
+    const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+    if (spreadsheetLeads.length > 0) {
+      // Search by lead_id first (most common case)
+      let lead = spreadsheetLeads.find((l) => l.lead_id === id);
+      
+      // If not found, try searching by any field that might match (id, name, etc.)
+      if (!lead) {
+        lead = spreadsheetLeads.find(
+          (l) => 
+            (l.id && String(l.id) === id) ||
+            (l.name && String(l.name).toLowerCase() === id.toLowerCase())
+        );
+      }
+      
+      if (lead) {
+        console.log(`[lead-detail] Found lead in spreadsheet: ${lead.lead_id}`);
+        return lead;
+      }
+    }
+  } catch (error) {
+    console.error("[lead-detail] Error loading from spreadsheet, trying Supabase:", error);
+  }
+
+  // Fallback to Supabase (try by UUID or lead_id)
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  // Try by UUID first
+  let query = supabase
     .from("leads")
     .select("id, lead_id, name, email, phone, organization, status, lead_type, source, question_data, quote_data, booking_data, assigned_rep_id, created_at, updated_at")
     .eq("id", id)
     .single();
+
+  let { data, error } = await query;
+
+  // If not found by UUID, try by lead_id
+  if (error || !data) {
+    query = supabase
+      .from("leads")
+      .select("id, lead_id, name, email, phone, organization, status, lead_type, source, question_data, quote_data, booking_data, assigned_rep_id, created_at, updated_at")
+      .eq("lead_id", id)
+      .single();
+    
+    const result = await query;
+    data = result.data;
+    error = result.error;
+  }
 
   if (error || !data) {
     return null;
@@ -110,12 +139,23 @@ async function getLead(id: string): Promise<Lead | null> {
   }
 
   return {
-    ...data,
+    id: data.id,
+    lead_id: data.lead_id,
+    name: data.name,
+    email: data.email,
+    phone: data.phone,
+    organization: data.organization,
+    status: data.status || "new",
+    lead_type: data.lead_type,
+    source: data.source,
     question_data: data.question_data || null,
     quote_data: data.quote_data || null,
     booking_data: data.booking_data || null,
+    assigned_rep_id: data.assigned_rep_id,
     assigned_rep_name: assignedRepName,
-  };
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  } as Lead;
 }
 
 
@@ -197,9 +237,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
 
       {/* Client Component with Header Actions and Tabs */}
       <LeadDetailClient
-        leadId={id}
+        leadId={lead.lead_id || id}
         lead={lead}
-        initialStatus={lead.status}
+        initialStatus={lead.status || "new"}
         notes={notes}
         events={events}
         isCeoOrAdmin={isCeoOrAdmin}

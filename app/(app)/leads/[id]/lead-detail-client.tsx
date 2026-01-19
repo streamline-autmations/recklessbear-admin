@@ -22,24 +22,26 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { addNoteAction, changeStatusAction, assignRepAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
+import type { Lead } from "@/types/leads";
 
-interface Lead {
-  id: string;
+interface DisplayLead extends Lead {
+  id?: string;
   lead_id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  organization: string | null;
-  status: string;
-  lead_type: string | null;
-  source: string | null;
-  question_data: Record<string, unknown> | null;
-  quote_data: Record<string, unknown> | null;
-  booking_data: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  assigned_rep_id: string | null;
-  assigned_rep_name: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  organization?: string | null;
+  status?: string | null;
+  lead_type?: string | null;
+  source?: string | null;
+  question_data?: Record<string, unknown> | null;
+  quote_data?: Record<string, unknown> | null;
+  booking_data?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  submission_date?: string | null;
+  assigned_rep_id?: string | null;
+  assigned_rep_name?: string | null;
 }
 
 interface Note {
@@ -66,7 +68,7 @@ interface Rep {
 
 interface LeadDetailClientProps {
   leadId: string;
-  lead: Lead;
+  lead: DisplayLead;
   initialStatus: string;
   notes: Note[];
   events: Event[];
@@ -259,8 +261,10 @@ export function LeadDetailClient({
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Key Identity Fields */}
           <Card>
             <CardContent className="pt-6">
+              <h3 className="text-lg font-semibold mb-4">Contact Information</h3>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm font-medium mb-1">Name</p>
@@ -285,9 +289,70 @@ export function LeadDetailClient({
                 <div>
                   <p className="text-sm font-medium mb-1">Created</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(lead.created_at)}
+                    {formatDate(lead.created_at || lead.submission_date || "")}
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* All Other Fields from Spreadsheet */}
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {(() => {
+                  // Fields to exclude from additional details (already shown above or special handling)
+                  const excludedFields = new Set([
+                    "id",
+                    "lead_id",
+                    "name",
+                    "email",
+                    "phone",
+                    "organization",
+                    "source",
+                    "created_at",
+                    "updated_at",
+                    "submission_date",
+                    "assigned_rep_id",
+                    "assigned_rep_name",
+                    "question_data",
+                    "quote_data",
+                    "booking_data",
+                    "status",
+                    "lead_type",
+                  ]);
+
+                  // Get all other fields from lead object
+                  const additionalFields = Object.entries(lead)
+                    .filter(([key]) => !excludedFields.has(key))
+                    .filter(([, value]) => {
+                      // Filter out null, undefined, empty strings, and empty objects
+                      if (value === null || value === undefined || value === "") return false;
+                      if (typeof value === "object" && Object.keys(value).length === 0) return false;
+                      return true;
+                    })
+                    .sort(([a], [b]) => a.localeCompare(b));
+
+                  if (additionalFields.length === 0) {
+                    return (
+                      <div className="col-span-2 text-center py-8 text-muted-foreground">
+                        No additional fields available
+                      </div>
+                    );
+                  }
+
+                  return additionalFields.map(([key, value]) => (
+                    <div key={key}>
+                      <p className="text-sm font-medium mb-1 capitalize">
+                        {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </p>
+                      <p className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
+                        {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
+                      </p>
+                    </div>
+                  ));
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -295,8 +360,38 @@ export function LeadDetailClient({
 
         {/* Request Tab */}
         <TabsContent value="request" className="space-y-4">
-          {lead.question_data || lead.quote_data || lead.booking_data ? (
-            <div className="space-y-4">
+          {(() => {
+            // Check if there's any question, quote, or booking data
+            const hasQuestionData = lead.question_data && Object.keys(lead.question_data).length > 0;
+            const hasQuoteData = lead.quote_data && Object.keys(lead.quote_data).length > 0;
+            const hasBookingData = lead.booking_data && Object.keys(lead.booking_data).length > 0;
+            
+            // Also check for question, quote, or booking fields directly in the lead
+            const hasQuestionField = lead.question && String(lead.question).trim() !== "";
+            const hasQuoteFields = Object.keys(lead).some(key => 
+              key.toLowerCase().includes("quote") && lead[key as keyof DisplayLead] && 
+              String(lead[key as keyof DisplayLead]).trim() !== ""
+            );
+            const hasBookingFields = Object.keys(lead).some(key => 
+              key.toLowerCase().includes("booking") && lead[key as keyof DisplayLead] && 
+              String(lead[key as keyof DisplayLead]).trim() !== ""
+            );
+
+            const hasAnyRequestData = hasQuestionData || hasQuoteData || hasBookingData || 
+                                     hasQuestionField || hasQuoteFields || hasBookingFields;
+
+            if (!hasAnyRequestData) {
+              return (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">No request details captured yet.</p>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            return (
+              <div className="space-y-4">
               {lead.question_data && (
                 <Card>
                   <CardContent className="pt-6">
@@ -327,18 +422,9 @@ export function LeadDetailClient({
                   </CardContent>
                 </Card>
               )}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <p className="text-sm text-muted-foreground">
-                    No request details captured yet.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         {/* Activity Tab */}

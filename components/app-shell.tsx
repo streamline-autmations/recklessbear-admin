@@ -15,6 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Separator } from "@/components/ui/separator";
 import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -104,6 +105,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2 px-3 py-2">

@@ -1,21 +1,8 @@
 ﻿import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/server';
 import { LeadsTableClient } from './leads-table-client';
-
-interface Lead {
-  id: string;
-  lead_id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  status: string;
-  lead_type: string | null;
-  source: string | null;
-  assigned_rep_id: string | null;
-  assigned_rep_name: string | null;
-  created_at: string;
-}
-
+import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';
+import type { Lead } from '@/types/leads';
 
 interface Rep {
   user_id: string;
@@ -38,20 +25,31 @@ async function getReps(): Promise<Rep[]> {
   return data || [];
 }
 
+/**
+ * Get leads from spreadsheet (primary source for dev display)
+ * Falls back to Supabase if spreadsheet not available
+ */
 async function getLeads(): Promise<Lead[]> {
-  const supabase = await createClient();
+  // Try loading from spreadsheet first
+  try {
+    const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+    if (spreadsheetLeads.length > 0) {
+      console.log(`[leads-page] Loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+      return spreadsheetLeads;
+    }
+  } catch (error) {
+    console.error("[leads-page] Error loading from spreadsheet, falling back to Supabase:", error);
+  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Fallback to Supabase if spreadsheet not available
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     console.error('Authentication error: missing user session');
     return [];
   }
 
-  // Build query - RLS will handle filtering for reps
-  // Fetch leads with assigned rep info
   const query = supabase
     .from('leads')
     .select(`
@@ -68,13 +66,10 @@ async function getLeads(): Promise<Lead[]> {
     `)
     .order('created_at', { ascending: false });
   
-  // RLS will automatically filter for reps, but we can be explicit if needed
-  // For reps, RLS policy should already filter to assigned_rep_id = auth.uid()
-  
   const { data: leadsData, error } = await query;
 
   if (error) {
-    console.error('Error fetching leads:', {
+    console.error('Error fetching leads from Supabase:', {
       message: error.message,
       details: error.details,
       hint: error.hint,
@@ -83,56 +78,20 @@ async function getLeads(): Promise<Lead[]> {
     return [];
   }
 
-  // Fetch rep names for assigned reps
-  interface LeadData {
-    assigned_rep_id: string | null;
-    id: string;
-    lead_id: string;
-    name: string | null;
-    email: string | null;
-    phone: string | null;
-    status: string;
-    lead_type: string | null;
-    source: string | null;
-    created_at: string;
-  }
-
-  interface ProfileData {
-    user_id: string;
-    full_name: string | null;
-  }
-
-  const repIds = [...new Set((leadsData || []).map((lead: LeadData) => lead.assigned_rep_id).filter((id): id is string => Boolean(id)))];
-  let repNames: Record<string, string | null> = {};
-  
-  if (repIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('user_id, full_name')
-      .in('user_id', repIds);
-    
-    if (profiles) {
-      repNames = (profiles as ProfileData[]).reduce((acc: Record<string, string | null>, profile: ProfileData) => {
-        acc[profile.user_id] = profile.full_name;
-        return acc;
-      }, {});
-    }
-  }
-
-  // Transform the data to include rep names
-  return (leadsData || []).map((lead: LeadData) => ({
+  // Transform Supabase data to Lead format
+  return (leadsData || []).map((lead) => ({
     id: lead.id,
     lead_id: lead.lead_id,
     name: lead.name,
     email: lead.email,
     phone: lead.phone,
-    status: lead.status,
+    status: lead.status || "new",
     lead_type: lead.lead_type,
     source: lead.source,
     assigned_rep_id: lead.assigned_rep_id,
-    assigned_rep_name: lead.assigned_rep_id ? (repNames[lead.assigned_rep_id] || null) : null,
+    assigned_rep_name: null, // Will be populated by client component if needed
     created_at: lead.created_at,
-  }));
+  })) as Lead[];
 }
 
 export default async function LeadsPage() {
@@ -144,14 +103,29 @@ export default async function LeadsPage() {
         <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
         <p className="text-muted-foreground">Manage and track your leads.</p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Leads List</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LeadsTableClient initialLeads={leads} reps={reps} />
-        </CardContent>
-      </Card>
+      {leads.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-2">No leads found.</p>
+            <p className="text-sm text-muted-foreground">
+              {typeof window === 'undefined' && (
+                <>
+                  Please add your leads.csv or leads.xlsx file to the <code className="px-1 py-0.5 bg-muted rounded">data/</code> directory.
+                </>
+              )}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads List ({leads.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LeadsTableClient initialLeads={leads} reps={reps} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
