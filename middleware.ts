@@ -54,10 +54,31 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const isRoot = pathname === "/";
   const isLoginPage = pathname === "/login";
   // Route group (app) doesn't appear in URL, so check actual routes
   const isProtectedRoute = pathname.startsWith("/dashboard") || 
                            pathname.startsWith("/leads");
+
+  // Handle root route: redirect to /dashboard if logged in, else /login
+  if (isRoot) {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/e097c6e9-bf0c-44e8-9f10-2e038c010e7d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "middleware.ts:59",
+        message: "root route redirect",
+        data: { hasUser: !!user },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "hyp-02",
+        hypothesisId: "C",
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+    return NextResponse.redirect(new URL(user ? "/dashboard" : "/login", request.url));
+  }
 
   // If logged in and visiting /login, redirect to dashboard
   if (user && isLoginPage) {
