@@ -2,6 +2,22 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  // #region agent log
+  fetch("http://127.0.0.1:7242/ingest/e097c6e9-bf0c-44e8-9f10-2e038c010e7d", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location: "middleware.ts:4",
+      message: "incoming request",
+      data: { path: request.nextUrl.pathname },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "hyp-01",
+      hypothesisId: "B",
+    }),
+  }).catch(() => {});
+  // #endregion agent log
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
