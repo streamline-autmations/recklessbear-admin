@@ -6,7 +6,6 @@ import { Topbar } from "@/components/topbar";
 import {
   Sheet,
   SheetContent,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 
 export default function AppLayout({

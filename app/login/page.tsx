@@ -1,7 +1,26 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { loginAction } from "./actions";
 
 export default function LoginPage() {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await loginAction(formData);
+      if (result && "error" in result) {
+        setError(result.error);
+      }
+    });
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -10,14 +29,40 @@ export default function LoginPage() {
           <CardDescription>Sign in to RecklessBear Admin</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Login functionality will be implemented later.
-            </p>
-            <Button className="w-full" disabled>
-              Sign In
+          <form action={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                required
+                disabled={isPending}
+                className="min-h-[44px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="••••••••"
+                required
+                disabled={isPending}
+                className="min-h-[44px]"
+              />
+            </div>
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full min-h-[44px]" disabled={isPending}>
+              {isPending ? "Signing in..." : "Sign In"}
             </Button>
-          </div>
+          </form>
         </CardContent>
       </Card>
     </div>

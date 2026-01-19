@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
+import { signOutAction } from "@/app/login/actions";
 
 interface TopbarProps {
   onMenuClick: () => void;
@@ -21,7 +22,17 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       </Button>
       <h1 className="text-lg font-semibold">RecklessBear Admin</h1>
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">User</span>
+        <form action={signOutAction}>
+          <Button
+            type="submit"
+            variant="ghost"
+            size="sm"
+            className="min-h-[44px] gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </Button>
+        </form>
       </div>
     </header>
   );
