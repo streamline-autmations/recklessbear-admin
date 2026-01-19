@@ -16,19 +16,6 @@ interface Lead {
   created_at: string;
 }
 
-async function getCurrentUserRole(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  return data?.role || null;
-}
 
 interface Rep {
   user_id: string;
@@ -63,11 +50,9 @@ async function getLeads(): Promise<Lead[]> {
     return [];
   }
 
-  const userRole = await getCurrentUserRole();
-
   // Build query - RLS will handle filtering for reps
   // Fetch leads with assigned rep info
-  let query = supabase
+  const query = supabase
     .from('leads')
     .select(`
       id, 
@@ -99,7 +84,25 @@ async function getLeads(): Promise<Lead[]> {
   }
 
   // Fetch rep names for assigned reps
-  const repIds = [...new Set((leadsData || []).map((lead: any) => lead.assigned_rep_id).filter(Boolean))];
+  interface LeadData {
+    assigned_rep_id: string | null;
+    id: string;
+    lead_id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    status: string;
+    lead_type: string | null;
+    source: string | null;
+    created_at: string;
+  }
+
+  interface ProfileData {
+    user_id: string;
+    full_name: string | null;
+  }
+
+  const repIds = [...new Set((leadsData || []).map((lead: LeadData) => lead.assigned_rep_id).filter((id): id is string => Boolean(id)))];
   let repNames: Record<string, string | null> = {};
   
   if (repIds.length > 0) {
@@ -109,7 +112,7 @@ async function getLeads(): Promise<Lead[]> {
       .in('user_id', repIds);
     
     if (profiles) {
-      repNames = profiles.reduce((acc: Record<string, string | null>, profile: any) => {
+      repNames = (profiles as ProfileData[]).reduce((acc: Record<string, string | null>, profile: ProfileData) => {
         acc[profile.user_id] = profile.full_name;
         return acc;
       }, {});
@@ -117,7 +120,7 @@ async function getLeads(): Promise<Lead[]> {
   }
 
   // Transform the data to include rep names
-  return (leadsData || []).map((lead: any) => ({
+  return (leadsData || []).map((lead: LeadData) => ({
     id: lead.id,
     lead_id: lead.lead_id,
     name: lead.name,

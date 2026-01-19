@@ -118,21 +118,6 @@ async function getLead(id: string): Promise<Lead | null> {
   };
 }
 
-function getLastActivity(notes: Note[], events: Event[], updatedAt: string): string {
-  const allDates: string[] = [];
-  
-  notes.forEach((note) => allDates.push(note.created_at));
-  events.forEach((event) => allDates.push(event.created_at));
-  allDates.push(updatedAt);
-
-  if (allDates.length === 0) {
-    return updatedAt;
-  }
-
-  return allDates.reduce((latest, date) => {
-    return new Date(date) > new Date(latest) ? date : latest;
-  }, allDates[0]);
-}
 
 async function getNotes(leadId: string): Promise<Note[]> {
   const supabase = await createClient();
