@@ -69,19 +69,19 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="hidden md:flex">
-        <aside className="w-72 border-r border-border bg-card p-4">
-          <div className="mb-6 text-lg font-semibold text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex">
+      <aside className="hidden md:flex w-64 border-r border-border bg-card p-4 flex-shrink-0">
+        <div className="w-full">
+          <div className="mb-4 text-lg font-semibold text-foreground">
             RecklessBear
           </div>
           <Separator className="mb-4" />
           {renderNav()}
-        </aside>
-      </div>
+        </div>
+      </aside>
 
-      <div className="md:ml-72">
-        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
               <SheetTrigger asChild>
@@ -128,8 +128,8 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
           </div>
         </header>
 
-        <main className="bg-background p-4 md:p-6">
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        <main className="bg-background p-4 md:p-6 flex-1 overflow-auto">
+          <div className="w-full">{children}</div>
         </main>
       </div>
     </div>
