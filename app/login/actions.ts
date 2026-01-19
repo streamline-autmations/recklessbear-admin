@@ -41,7 +41,7 @@ export async function loginAction(formData: FormData): Promise<{ error?: string 
   redirect("/dashboard");
 }
 
-export async function signOutAction() {
+export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");

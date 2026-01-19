@@ -44,7 +44,7 @@ export async function saveSettingsAction(formData: FormData) {
 
   const result = settingsSchema.safeParse(rawPayload);
   if (!result.success) {
-    return { error: result.error.issues[0]?.message ?? 'Invalid settings' };
+    throw new Error(result.error.issues[0]?.message ?? 'Invalid settings');
   }
 
   const { error } = await supabase.from('system_settings').upsert(
@@ -57,7 +57,7 @@ export async function saveSettingsAction(formData: FormData) {
   );
 
   if (error) {
-    return { error: error.message || 'Failed to save settings' };
+    throw new Error(error.message || 'Failed to save settings');
   }
 
   revalidatePath('/settings');

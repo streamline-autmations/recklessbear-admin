@@ -103,7 +103,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                     Role: {userRole}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <form action={signOutAction}>
+                  <form action={async () => { try { await signOutAction(); } catch { /* redirect throws */ } }}>
                     <DropdownMenuItem asChild>
                       <button type="submit">Sign Out</button>
                     </DropdownMenuItem>
