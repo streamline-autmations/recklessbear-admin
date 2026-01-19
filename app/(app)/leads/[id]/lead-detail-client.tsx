@@ -392,33 +392,98 @@ export function LeadDetailClient({
 
             return (
               <div className="space-y-4">
-              {lead.question_data && (
+              {/* Question Block */}
+              {(hasQuestionData || hasQuestionField) && (
                 <Card>
                   <CardContent className="pt-6">
-                    <h3 className="text-sm font-semibold mb-3">Question</h3>
-                    <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words bg-muted p-3 rounded">
-                      {formatPayload(lead.question_data)}
-                    </pre>
+                    <h3 className="text-lg font-semibold mb-4">Question</h3>
+                    <div className="space-y-3">
+                      {lead.question && (
+                        <div>
+                          <p className="text-sm font-medium mb-1">Question</p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words bg-muted p-3 rounded">
+                            {String(lead.question)}
+                          </p>
+                        </div>
+                      )}
+                      {hasQuestionData && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {Object.entries(lead.question_data!).map(([key, value]) => {
+                            if (!value || value === "" || key === "question") return null;
+                            return (
+                              <div key={key}>
+                                <p className="text-sm font-medium mb-1 capitalize">
+                                  {key.replace(/_/g, " ")}
+                                </p>
+                                <p className="text-sm text-muted-foreground break-words">
+                                  {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}
-              {lead.quote_data && (
+              
+              {/* Quote Block */}
+              {(hasQuoteData || hasQuoteFields) && (
                 <Card>
                   <CardContent className="pt-6">
-                    <h3 className="text-sm font-semibold mb-3">Quote Request</h3>
-                    <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words bg-muted p-3 rounded">
-                      {formatPayload(lead.quote_data)}
-                    </pre>
+                    <h3 className="text-lg font-semibold mb-4">Quote Request</h3>
+                    {hasQuoteData ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {Object.entries(lead.quote_data!).map(([key, value]) => {
+                          if (!value || value === "") return null;
+                          return (
+                            <div key={key}>
+                              <p className="text-sm font-medium mb-1 capitalize">
+                                {key.replace(/_/g, " ")}
+                              </p>
+                              <p className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
+                                {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Quote request data is being processed.
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
-              {lead.booking_data && (
+              
+              {/* Booking Block */}
+              {(hasBookingData || hasBookingFields) && (
                 <Card>
                   <CardContent className="pt-6">
-                    <h3 className="text-sm font-semibold mb-3">Booking Request</h3>
-                    <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words bg-muted p-3 rounded">
-                      {formatPayload(lead.booking_data)}
-                    </pre>
+                    <h3 className="text-lg font-semibold mb-4">Booking Request</h3>
+                    {hasBookingData ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {Object.entries(lead.booking_data!).map(([key, value]) => {
+                          if (!value || value === "") return null;
+                          return (
+                            <div key={key}>
+                              <p className="text-sm font-medium mb-1 capitalize">
+                                {key.replace(/_/g, " ")}
+                              </p>
+                              <p className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
+                                {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Booking request data is being processed.
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

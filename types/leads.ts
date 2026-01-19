@@ -18,6 +18,9 @@ export interface Lead {
   lead_type?: string | null;
   source?: string | null;
   
+  // Intents (multi-intent support)
+  intents?: string[]; // Array of: "Quote", "Booking", "Question"
+  
   // Assignment
   assigned_rep_id?: string | null;
   assigned_rep_name?: string | null;
@@ -27,6 +30,7 @@ export interface Lead {
   updated_at?: string | null;
   submission_date?: string | null;
   last_activity_at?: string | null;
+  last_intent_at?: string | null;
   
   // Request data (various formats)
   question?: string | null;

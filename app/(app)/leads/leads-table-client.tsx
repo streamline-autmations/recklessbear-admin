@@ -54,6 +54,7 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
   const [assignedRepFilter, setAssignedRepFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"created" | "updated" | "status">("updated");
 
   // Get unique values for filters
   const statuses = useMemo(() => {
@@ -62,7 +63,17 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
   }, [initialLeads]);
 
   const leadTypes = useMemo(() => {
-    const unique = new Set(initialLeads.map((lead) => lead.lead_type || "").filter(Boolean));
+    const unique = new Set<string>();
+    initialLeads.forEach((lead) => {
+      // Get types from intents array
+      if (lead.intents && lead.intents.length > 0) {
+        lead.intents.forEach(intent => unique.add(intent));
+      }
+      // Also include lead_type if exists
+      if (lead.lead_type) {
+        unique.add(lead.lead_type);
+      }
+    });
     return Array.from(unique).sort();
   }, [initialLeads]);
 
@@ -93,9 +104,18 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
       filtered = filtered.filter((lead) => (lead.status || "").toLowerCase() === statusFilter.toLowerCase());
     }
 
-    // Lead type filter
+    // Lead type/Intent filter
     if (leadTypeFilter !== "all") {
-      filtered = filtered.filter((lead) => (lead.lead_type || "").toLowerCase() === leadTypeFilter.toLowerCase());
+      filtered = filtered.filter((lead) => {
+        // Check intents array first
+        if (lead.intents && lead.intents.length > 0) {
+          return lead.intents.some(intent => 
+            intent.toLowerCase() === leadTypeFilter.toLowerCase()
+          );
+        }
+        // Fallback to lead_type
+        return (lead.lead_type || "").toLowerCase() === leadTypeFilter.toLowerCase();
+      });
     }
 
     // Assigned rep filter
@@ -107,14 +127,37 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
       }
     }
 
+    // Apply sorting
+    if (sortBy === "created") {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.submission_date || 0).getTime();
+        const dateB = new Date(b.created_at || b.submission_date || 0).getTime();
+        return dateB - dateA; // Newest first
+      });
+    } else if (sortBy === "status") {
+      filtered.sort((a, b) => {
+        const statusA = (a.status || "").toLowerCase();
+        const statusB = (b.status || "").toLowerCase();
+        return statusA.localeCompare(statusB);
+      });
+    } else {
+      // Default: updated (latest first)
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.last_activity_at || a.created_at || a.submission_date || 0).getTime();
+        const dateB = new Date(b.updated_at || b.last_activity_at || b.created_at || b.submission_date || 0).getTime();
+        return dateB - dateA; // Newest first
+      });
+    }
+
     return filtered;
-  }, [initialLeads, searchQuery, statusFilter, leadTypeFilter, assignedRepFilter]);
+  }, [initialLeads, searchQuery, statusFilter, leadTypeFilter, assignedRepFilter, sortBy]);
 
   function clearFilters() {
     setSearchQuery("");
     setStatusFilter("all");
     setLeadTypeFilter("all");
     setAssignedRepFilter("all");
+    setSortBy("updated");
   }
 
   const hasActiveFilters = searchQuery || statusFilter !== "all" || leadTypeFilter !== "all" || assignedRepFilter !== "all";
@@ -186,6 +229,16 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
               </SelectContent>
             </Select>
           )}
+          <Select value={sortBy} onValueChange={(value: "created" | "updated" | "status") => setSortBy(value)}>
+            <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
+              <SelectValue placeholder="Sort By" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Latest Updated</SelectItem>
+              <SelectItem value="created">Latest Created</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+            </SelectContent>
+          </Select>
           {hasActiveFilters && (
             <Button
               variant="outline"
@@ -238,7 +291,18 @@ export function LeadsTableClient({ initialLeads, reps }: LeadsTableClientProps) 
                       {lead.name || <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      {lead.lead_type ? (
+                      {lead.intents && lead.intents.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {lead.intents.map((intent) => (
+                            <span
+                              key={intent}
+                              className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                            >
+                              {intent}
+                            </span>
+                          ))}
+                        </div>
+                      ) : lead.lead_type ? (
                         <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
                           {lead.lead_type}
                         </span>
