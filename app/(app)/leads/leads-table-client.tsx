@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/browser";
 import {
   Select,
   SelectContent,
@@ -51,6 +53,7 @@ interface LeadsTableClientProps {
 }
 
 export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTableClientProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
@@ -58,6 +61,36 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "status">("updated");
   const [activePreset, setActivePreset] = useState<string | null>(null);
+
+  // Subscribe to Supabase Realtime for leads table updates
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Subscribe to INSERT, UPDATE, DELETE events on leads table
+    const channel = supabase
+      .channel('leads-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'leads',
+        },
+        (payload) => {
+          console.log('[realtime] Lead changed:', payload.eventType, payload.new || payload.old);
+          // Refresh the page data to get latest leads
+          router.refresh();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[realtime] Subscription status:', status);
+      });
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [router]);
 
   // Get unique values for filters
   const statuses = useMemo(() => {

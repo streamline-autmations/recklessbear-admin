@@ -4,6 +4,10 @@ import { LeadsTableClient } from './leads-table-client';
 import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';
 import type { Lead } from '@/types/leads';
 
+// Force dynamic rendering to always fetch latest data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface Rep {
   user_id: string;
   full_name: string | null;
@@ -26,30 +30,29 @@ async function getReps(): Promise<Rep[]> {
 }
 
 /**
- * Get leads from spreadsheet (primary source for dev display)
- * Falls back to Supabase if spreadsheet not available
+ * Get leads from Supabase (primary source of truth)
+ * Falls back to spreadsheet if Supabase is empty or unavailable (dev mode)
  */
 async function getLeads(): Promise<Lead[]> {
-  // Try loading from spreadsheet first
-  try {
-    const spreadsheetLeads = await loadLeadsFromSpreadsheet();
-    if (spreadsheetLeads.length > 0) {
-      console.log(`[leads-page] Loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-      return spreadsheetLeads;
-    }
-  } catch (error) {
-    console.error("[leads-page] Error loading from spreadsheet, falling back to Supabase:", error);
-  }
-
-  // Fallback to Supabase if spreadsheet not available
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     console.error('Authentication error: missing user session');
+    // Fallback to spreadsheet if not authenticated
+    try {
+      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+      if (spreadsheetLeads.length > 0) {
+        console.log(`[leads-page] Not authenticated, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+        return spreadsheetLeads;
+      }
+    } catch {
+      // Ignore spreadsheet errors if auth fails
+    }
     return [];
   }
 
+  // Primary: Fetch from Supabase with no caching
   const query = supabase
     .from('leads')
     .select(`
@@ -62,11 +65,14 @@ async function getLeads(): Promise<Lead[]> {
       lead_type,
       source,
       assigned_rep_id,
-      created_at
-    `)
-    .order('created_at', { ascending: false });
+      created_at,
+      updated_at,
+      last_activity_at
+    `, { count: 'exact' })
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false }); // Secondary sort
   
-  const { data: leadsData, error } = await query;
+  const { data: leadsData, error, count } = await query;
 
   if (error) {
     console.error('Error fetching leads from Supabase:', {
@@ -75,7 +81,32 @@ async function getLeads(): Promise<Lead[]> {
       hint: error.hint,
       code: error.code,
     });
+    // Fallback to spreadsheet on error
+    try {
+      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+      if (spreadsheetLeads.length > 0) {
+        console.log(`[leads-page] Supabase error, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+        return spreadsheetLeads;
+      }
+    } catch (spreadsheetError) {
+      console.error("[leads-page] Spreadsheet fallback also failed:", spreadsheetError);
+    }
     return [];
+  }
+
+  console.log(`[leads-page] Loaded ${count || leadsData?.length || 0} leads from Supabase`);
+
+  // If Supabase returns empty, fallback to spreadsheet (dev mode)
+  if ((!leadsData || leadsData.length === 0)) {
+    try {
+      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+      if (spreadsheetLeads.length > 0) {
+        console.log(`[leads-page] Supabase empty, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+        return spreadsheetLeads;
+      }
+    } catch {
+      // Ignore spreadsheet errors if Supabase is just empty
+    }
   }
 
   // Transform Supabase data to Lead format
@@ -91,6 +122,8 @@ async function getLeads(): Promise<Lead[]> {
     assigned_rep_id: lead.assigned_rep_id,
     assigned_rep_name: null, // Will be populated by client component if needed
     created_at: lead.created_at,
+    updated_at: lead.updated_at || lead.created_at,
+    last_activity_at: lead.last_activity_at || lead.updated_at || lead.created_at,
   })) as Lead[];
 }
 
