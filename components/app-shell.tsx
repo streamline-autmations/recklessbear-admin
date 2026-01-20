@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Search } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Input } from "@/components/ui/input";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -33,6 +34,19 @@ interface AppShellProps {
 export function AppShell({ children, userName, userRole }: AppShellProps) {
   const pathname = usePathname();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  // Get page title from current route
+  const getPageTitle = () => {
+    const activeNav = navigation.find(
+      (item) => pathname === item.href || pathname?.startsWith(`${item.href}/`)
+    );
+    
+    if (pathname?.startsWith("/leads/")) {
+      return "Lead Details";
+    }
+    
+    return activeNav?.name || "Dashboard";
+  };
 
   const renderNav = (mobile?: boolean) => {
     const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
@@ -99,9 +113,22 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                 {renderNav(true)}
               </SheetContent>
             </Sheet>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-muted-foreground">RecklessBear Admin</p>
-              <p className="text-xl font-semibold text-foreground">Light CRM</p>
+              <p className="text-xl font-semibold text-foreground">{getPageTitle()}</p>
+            </div>
+            {/* Optional: Global search placeholder - can be implemented later */}
+            <div className="hidden lg:flex items-center gap-2 max-w-xs w-full">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search..."
+                  className="pl-8 h-9"
+                  disabled
+                  aria-label="Global search (coming soon)"
+                />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">

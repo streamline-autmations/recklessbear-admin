@@ -254,8 +254,8 @@ export function LeadDetailClient({
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6">
           <TabsTrigger value="overview" className="min-h-[44px] text-xs sm:text-sm">Overview</TabsTrigger>
-          <TabsTrigger value="request" className="min-h-[44px] text-xs sm:text-sm">Request</TabsTrigger>
-          <TabsTrigger value="activity" className="min-h-[44px] text-xs sm:text-sm">Activity</TabsTrigger>
+          <TabsTrigger value="details" className="min-h-[44px] text-xs sm:text-sm">Details</TabsTrigger>
+          <TabsTrigger value="timeline" className="min-h-[44px] text-xs sm:text-sm">Timeline</TabsTrigger>
           <TabsTrigger value="notes" className="min-h-[44px] text-xs sm:text-sm">Notes</TabsTrigger>
         </TabsList>
 
@@ -358,8 +358,8 @@ export function LeadDetailClient({
           </Card>
         </TabsContent>
 
-        {/* Request Tab */}
-        <TabsContent value="request" className="space-y-4">
+        {/* Details Tab */}
+        <TabsContent value="details" className="space-y-4">
           {(() => {
             // Check if there's any question, quote, or booking data
             const hasQuestionData = lead.question_data && Object.keys(lead.question_data).length > 0;
@@ -492,8 +492,8 @@ export function LeadDetailClient({
           })()}
         </TabsContent>
 
-        {/* Activity Tab */}
-        <TabsContent value="activity" className="space-y-4">
+        {/* Timeline Tab */}
+        <TabsContent value="timeline" className="space-y-4">
           {events.length === 0 ? (
             <Card>
               <CardContent className="pt-6">

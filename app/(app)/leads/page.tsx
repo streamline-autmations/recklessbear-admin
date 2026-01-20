@@ -94,8 +94,18 @@ async function getLeads(): Promise<Lead[]> {
   })) as Lead[];
 }
 
+async function getCurrentUserId(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id || null;
+}
+
 export default async function LeadsPage() {
-  const [leads, reps] = await Promise.all([getLeads(), getReps()]);
+  const [leads, reps, currentUserId] = await Promise.all([
+    getLeads(),
+    getReps(),
+    getCurrentUserId(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -122,7 +132,7 @@ export default async function LeadsPage() {
             <CardTitle>Leads List ({leads.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <LeadsTableClient initialLeads={leads} reps={reps} />
+            <LeadsTableClient initialLeads={leads} reps={reps} currentUserId={currentUserId} />
           </CardContent>
         </Card>
       )}
