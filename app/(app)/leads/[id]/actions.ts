@@ -16,7 +16,7 @@ const changeStatusSchema = z.object({
 
 const assignRepSchema = z.object({
   leadId: z.string().uuid(),
-  repId: z.string().uuid(),
+  repId: z.string().uuid().or(z.literal("")), // Allow empty string for unassigning
 });
 
 export async function addNoteAction(formData: FormData): Promise<{ error?: string } | void> {
@@ -161,15 +161,6 @@ export async function assignRepAction(
     return { error: "Unauthorized: Only CEO/Admin can assign reps" };
   }
 
-  // Get rep profile for label
-  const { data: repProfile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("user_id", result.data.repId)
-    .single();
-
-  const repLabel = repProfile?.full_name || result.data.repId;
-
   // Get current lead status
   const { data: currentLead } = await supabase
     .from("leads")
@@ -180,6 +171,42 @@ export async function assignRepAction(
   if (!currentLead) {
     return { error: "Lead not found" };
   }
+
+  // Handle unassigning (empty repId)
+  if (!result.data.repId || result.data.repId === "") {
+    const updateData: { assigned_rep_id: null } = {
+      assigned_rep_id: null,
+    };
+
+    const { error: updateError } = await supabase
+      .from("leads")
+      .update(updateData)
+      .eq("id", result.data.leadId);
+
+    if (updateError) {
+      return { error: updateError.message || "Failed to unassign rep" };
+    }
+
+    // Insert event for unassignment
+    await supabase.from("lead_events").insert({
+      lead_db_id: result.data.leadId,
+      actor_user_id: user.id,
+      event_type: "rep_unassigned",
+      payload: {},
+    });
+
+    revalidatePath(`/leads/${result.data.leadId}`);
+    return;
+  }
+
+  // Get rep profile for label (only if assigning)
+  const { data: repProfile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("user_id", result.data.repId)
+    .single();
+
+  const repLabel = repProfile?.full_name || result.data.repId;
 
   // Update lead - set assigned_rep_id and optionally update status
   const updateData: { assigned_rep_id: string; status?: string } = {

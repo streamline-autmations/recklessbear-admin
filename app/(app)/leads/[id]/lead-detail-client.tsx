@@ -88,7 +88,7 @@ export function LeadDetailClient({
   const router = useRouter();
   const [noteText, setNoteText] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(initialStatus);
-  const [selectedRepId, setSelectedRepId] = useState<string>(lead.assigned_rep_id || "");
+  const [selectedRepId, setSelectedRepId] = useState<string>(lead.assigned_rep_id || "__unassigned__");
   const [noteError, setNoteError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [repError, setRepError] = useState<string | null>(null);
@@ -159,15 +159,16 @@ export function LeadDetailClient({
     setRepError(null);
     const formData = new FormData();
     formData.set("leadId", leadId);
-    formData.set("repId", newRepId);
+    // Convert "__unassigned__" back to empty string for server
+    formData.set("repId", newRepId === "__unassigned__" ? "" : newRepId);
     startRepTransition(async () => {
       const result = await assignRepAction(formData);
       if (result && "error" in result) {
         setRepError(result.error);
-        setSelectedRepId(lead.assigned_rep_id || "");
+        setSelectedRepId(lead.assigned_rep_id || "__unassigned__");
         toast.error(result.error);
       } else {
-        toast.success("Rep assigned successfully");
+        toast.success(newRepId === "__unassigned__" ? "Rep unassigned successfully" : "Rep assigned successfully");
         router.refresh();
       }
     });
@@ -217,7 +218,7 @@ export function LeadDetailClient({
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
+                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
                       {reps.map((rep) => (
                         <SelectItem key={rep.user_id} value={rep.user_id}>
                           {rep.full_name || rep.user_id}
