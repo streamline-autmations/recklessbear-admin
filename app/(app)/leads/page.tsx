@@ -116,10 +116,11 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       card_id,
       card_created
     `, { count: 'exact' })
-    .limit(500)
     .order('submission_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false })
     .order('updated_at', { ascending: false, nullsFirst: false })
+    // Remove limit to fetch all leads - Supabase has a default limit of 1000
+    .limit(1000)
   
   const { data: leadsData, error, count } = await query;
 
