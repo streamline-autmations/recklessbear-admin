@@ -195,11 +195,50 @@ async function getLead(id: string): Promise<Lead | null> {
     assignedRepName = user?.name || user?.email || null;
   }
 
-  // Build intents array from flags
+  // Build intents array from flags (canonical 3 intents only)
   const intents: string[] = [];
   if (data.has_requested_quote) intents.push("Quote");
   if (data.has_booked_call) intents.push("Booking");
   if (data.has_asked_question) intents.push("Question");
+  
+  // Also infer from field data if flags are false but data exists
+  if (!data.has_requested_quote) {
+    const hasQuoteData = !!(
+      data.delivery_date ||
+      data.category ||
+      data.product_type ||
+      data.accessories_selected ||
+      data.include_warmups ||
+      data.quantity_range ||
+      data.has_deadline ||
+      data.design_notes ||
+      data.attachments ||
+      (data.quote_data && Object.keys(data.quote_data).length > 0)
+    );
+    if (hasQuoteData) intents.push("Quote");
+  }
+  
+  if (!data.has_booked_call) {
+    const hasBookingData = !!(
+      data.booking_time ||
+      data.booking_approved ||
+      (data.booking_data && Object.keys(data.booking_data).length > 0)
+    );
+    if (hasBookingData) intents.push("Booking");
+  }
+  
+  if (!data.has_asked_question) {
+    const hasQuestionData = !!(
+      data.question ||
+      (data.question_data && Object.keys(data.question_data).length > 0)
+    );
+    if (hasQuestionData) intents.push("Question");
+  }
+  
+  // Remove duplicates and ensure only canonical intents
+  const canonicalIntents = Array.from(new Set(intents)).filter(intent => 
+    ["Quote", "Booking", "Question"].includes(intent)
+  );
 
   return {
     id: data.id,
@@ -218,7 +257,7 @@ async function getLead(id: string): Promise<Lead | null> {
     has_requested_quote: data.has_requested_quote,
     has_booked_call: data.has_booked_call,
     has_asked_question: data.has_asked_question,
-    intents,
+    intents: canonicalIntents,
     question_data: data.question_data || null,
     quote_data: data.quote_data || null,
     booking_data: data.booking_data || null,

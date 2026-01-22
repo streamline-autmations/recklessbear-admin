@@ -49,8 +49,10 @@ interface LeadRow {
   has_deadline: string | null;
   design_notes: string | null;
   attachments: string | null;
+  message: string | null;
   booking_time: string | null;
   booking_approved: string | null;
+  pre_call_notes: string | null;
   question: string | null;
   quote_data: Record<string, unknown> | null;
   booking_data: Record<string, unknown> | null;
@@ -102,6 +104,7 @@ function isQuestionType(leadType: string | null): boolean {
  * Infer quote intent from field data
  */
 function inferQuoteIntent(lead: LeadRow): boolean {
+  // Check if any quote-related fields have data
   return !!(
     lead.delivery_date ||
     lead.category ||
@@ -112,7 +115,14 @@ function inferQuoteIntent(lead: LeadRow): boolean {
     lead.has_deadline ||
     lead.design_notes ||
     lead.attachments ||
-    (lead.quote_data && Object.keys(lead.quote_data).length > 0)
+    (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0) ||
+    // Also check if message field contains quote-related keywords
+    (lead.message && typeof lead.message === 'string' && (
+      lead.message.toLowerCase().includes('quote') ||
+      lead.message.toLowerCase().includes('price') ||
+      lead.message.toLowerCase().includes('cost') ||
+      lead.message.toLowerCase().includes('pricing')
+    ))
   );
 }
 
@@ -123,7 +133,15 @@ function inferBookingIntent(lead: LeadRow): boolean {
   return !!(
     lead.booking_time ||
     lead.booking_approved ||
-    (lead.booking_data && Object.keys(lead.booking_data).length > 0)
+    (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0) ||
+    lead.pre_call_notes ||
+    // Also check if message field contains booking-related keywords
+    (lead.message && typeof lead.message === 'string' && (
+      lead.message.toLowerCase().includes('book') ||
+      lead.message.toLowerCase().includes('call') ||
+      lead.message.toLowerCase().includes('schedule') ||
+      lead.message.toLowerCase().includes('appointment')
+    ))
   );
 }
 
@@ -133,7 +151,18 @@ function inferBookingIntent(lead: LeadRow): boolean {
 function inferQuestionIntent(lead: LeadRow): boolean {
   return !!(
     lead.question ||
-    (lead.question_data && Object.keys(lead.question_data).length > 0)
+    (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0) ||
+    // Also check if message field contains question-related keywords
+    (lead.message && typeof lead.message === 'string' && (
+      lead.message.toLowerCase().includes('?') ||
+      lead.message.toLowerCase().includes('how') ||
+      lead.message.toLowerCase().includes('what') ||
+      lead.message.toLowerCase().includes('when') ||
+      lead.message.toLowerCase().includes('where') ||
+      lead.message.toLowerCase().includes('why') ||
+      lead.message.toLowerCase().includes('can you') ||
+      lead.message.toLowerCase().includes('do you')
+    ))
   );
 }
 
@@ -162,6 +191,7 @@ function normalizeLeadIntents(lead: LeadRow): {
   }
 
   // Infer from field data (only upgrade false->true)
+  // This is the PRIMARY way to set intents - if data exists, set the intent
   if (!hasQuote && inferQuoteIntent(lead)) {
     hasQuote = true;
   }
@@ -170,6 +200,19 @@ function normalizeLeadIntents(lead: LeadRow): {
   }
   if (!hasQuestion && inferQuestionIntent(lead)) {
     hasQuestion = true;
+  }
+  
+  // IMPORTANT: If a lead has NO intents set but has ANY data, we should infer at least one
+  // This handles cases where leads have data but flags weren't set
+  if (!hasQuote && !hasBooking && !hasQuestion) {
+    // If lead has any quote data, default to Quote
+    if (inferQuoteIntent(lead)) {
+      hasQuote = true;
+    } else if (inferBookingIntent(lead)) {
+      hasBooking = true;
+    } else if (inferQuestionIntent(lead)) {
+      hasQuestion = true;
+    }
   }
 
   return {
@@ -206,8 +249,10 @@ async function normalizeIntents(dryRun: boolean = false) {
       has_deadline,
       design_notes,
       attachments,
+      message,
       booking_time,
       booking_approved,
+      pre_call_notes,
       question,
       quote_data,
       booking_data,

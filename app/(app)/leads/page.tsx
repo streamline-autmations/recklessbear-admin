@@ -159,11 +159,50 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
 
   // Transform Supabase data to Lead format and build intents array
   const leads = (leadsData || []).map((lead) => {
-    // Build intents array from flags
+    // Build intents array from flags (canonical 3 intents only)
     const intents: string[] = [];
     if (lead.has_requested_quote) intents.push("Quote");
     if (lead.has_booked_call) intents.push("Booking");
     if (lead.has_asked_question) intents.push("Question");
+    
+    // Also infer from field data if flags are false but data exists
+    if (!lead.has_requested_quote) {
+      const hasQuoteData = !!(
+        lead.delivery_date ||
+        lead.category ||
+        lead.product_type ||
+        lead.accessories_selected ||
+        lead.include_warmups ||
+        lead.quantity_range ||
+        lead.has_deadline ||
+        lead.design_notes ||
+        lead.attachments ||
+        (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0)
+      );
+      if (hasQuoteData) intents.push("Quote");
+    }
+    
+    if (!lead.has_booked_call) {
+      const hasBookingData = !!(
+        lead.booking_time ||
+        lead.booking_approved ||
+        (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0)
+      );
+      if (hasBookingData) intents.push("Booking");
+    }
+    
+    if (!lead.has_asked_question) {
+      const hasQuestionData = !!(
+        lead.question ||
+        (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0)
+      );
+      if (hasQuestionData) intents.push("Question");
+    }
+    
+    // Remove duplicates and ensure only canonical intents
+    const canonicalIntents = Array.from(new Set(intents)).filter(intent => 
+      ["Quote", "Booking", "Question"].includes(intent)
+    );
 
     return {
       id: lead.id,
@@ -184,7 +223,7 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       has_requested_quote: lead.has_requested_quote,
       has_booked_call: lead.has_booked_call,
       has_asked_question: lead.has_asked_question,
-      intents,
+      intents: canonicalIntents,
       created_at: lead.created_at,
       updated_at: lead.updated_at || lead.created_at,
       submission_date: lead.submission_date,
@@ -220,15 +259,6 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
   return { leads, count: count || leads.length };
 }
 
-/**
- * Get leads from Supabase (primary source of truth)
- * Falls back to spreadsheet if Supabase is empty or unavailable (dev mode)
- * @deprecated Use getLeadsWithCount() instead
- */
-async function getLeads(): Promise<Lead[]> {
-  const { leads } = await getLeadsWithCount();
-  return leads;
-}
 
 export default async function LeadsPage() {
   const [{ leads, count }, reps, currentUserId] = await Promise.all([

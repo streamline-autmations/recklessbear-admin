@@ -292,6 +292,54 @@ export function LeadDetailClient({
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Contact Information */}
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="text-lg font-semibold mb-4">Contact Information</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-sm font-medium mb-1">Name</p>
+                  <p className="text-sm text-muted-foreground">{lead.customer_name || lead.name || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">Email</p>
+                  <p className="text-sm text-muted-foreground">
+                    {lead.email ? (
+                      <a href={`mailto:${lead.email}`} className="text-primary hover:underline">
+                        {lead.email}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">Phone</p>
+                  <p className="text-sm text-muted-foreground">
+                    {lead.phone ? (
+                      <a href={`tel:${lead.phone}`} className="text-primary hover:underline">
+                        {lead.phone}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">Company/Organization</p>
+                  <p className="text-sm text-muted-foreground">{lead.organization || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">Date Submitted</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDateSafe(lead.submission_date || lead.created_at)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Lead Information */}
           <Card>
             <CardContent className="pt-6">
               <h3 className="text-lg font-semibold mb-4">Lead Information</h3>

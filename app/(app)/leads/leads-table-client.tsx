@@ -65,14 +65,51 @@ interface LeadsTableClientProps {
 }
 
 /**
- * Build intents array from boolean fields
+ * Build intents array from boolean fields and field data
  */
 function buildIntents(lead: DisplayLead): string[] {
   const intents: string[] = [];
   if (lead.has_requested_quote) intents.push("Quote");
   if (lead.has_booked_call) intents.push("Booking");
   if (lead.has_asked_question) intents.push("Question");
-  return intents;
+  
+  // Also infer from field data if flags are false but data exists
+  if (!lead.has_requested_quote) {
+    const hasQuoteData = !!(
+      lead.category ||
+      lead.product_type ||
+      lead.accessories_selected ||
+      lead.include_warmups ||
+      lead.quantity_range ||
+      lead.has_deadline ||
+      lead.design_notes ||
+      lead.attachments ||
+      (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0)
+    );
+    if (hasQuoteData) intents.push("Quote");
+  }
+  
+  if (!lead.has_booked_call) {
+    const hasBookingData = !!(
+      lead.booking_time ||
+      lead.booking_approved ||
+      (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0)
+    );
+    if (hasBookingData) intents.push("Booking");
+  }
+  
+  if (!lead.has_asked_question) {
+    const hasQuestionData = !!(
+      lead.question ||
+      (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0)
+    );
+    if (hasQuestionData) intents.push("Question");
+  }
+  
+  // Remove duplicates and ensure only canonical intents (no "Quote Request", etc.)
+  return Array.from(new Set(intents)).filter(intent => 
+    ["Quote", "Booking", "Question"].includes(intent)
+  );
 }
 
 export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTableClientProps) {
@@ -561,6 +598,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                 <TableHead>Name</TableHead>
                 <TableHead>Intents</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Date Submitted</TableHead>
                 <TableHead className="hidden lg:table-cell">Assigned Rep</TableHead>
                 <TableHead className="hidden lg:table-cell">Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -569,7 +607,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
             <TableBody>
               {filteredWithPresets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     {hasActiveFilters || activePreset
                       ? "No leads found matching your filters."
                       : "No leads yet."}
@@ -609,6 +647,9 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                           "new" | "assigned" | "contacted" | "quote_sent" | "quote_approved" | "in_production" | "completed" | "lost"
                         } 
                       />
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground">
+                      {formatDate(lead.submission_date || lead.created_at || "")}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {lead.assigned_rep_name || lead.assigned_rep_id || <span className="text-muted-foreground">—</span>}
@@ -699,8 +740,9 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                     </div>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    Updated {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Submitted {formatDate(lead.submission_date || lead.created_at || "")}</span>
+                    <span>Updated {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}</span>
                   </div>
                 </div>
               </CardContent>
