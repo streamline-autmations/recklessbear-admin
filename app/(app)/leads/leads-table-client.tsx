@@ -19,10 +19,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/status-badge";
-import { X } from "lucide-react";
+import { X, Filter, ChevronRight } from "lucide-react";
 
 import type { Lead } from '@/types/leads';
 
@@ -33,12 +43,13 @@ interface DisplayLead extends Lead {
   email?: string | null;
   phone?: string | null;
   status?: string | null;
-  lead_type?: string | null;
-  source?: string | null;
   assigned_rep_id?: string | null;
   assigned_rep_name?: string | null;
   created_at?: string | null;
   submission_date?: string | null;
+  updated_at?: string | null;
+  last_activity_at?: string | null;
+  organization?: string | null;
 }
 
 interface Rep {
@@ -53,33 +64,42 @@ interface LeadsTableClientProps {
   currentUserId?: string | null;
 }
 
+/**
+ * Build intents array from boolean fields
+ */
+function buildIntents(lead: DisplayLead): string[] {
+  const intents: string[] = [];
+  if (lead.has_requested_quote) intents.push("Quote");
+  if (lead.has_booked_call) intents.push("Booking");
+  if (lead.has_asked_question) intents.push("Question");
+  return intents;
+}
+
 export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTableClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
+  const [intentFilters, setIntentFilters] = useState<Set<string>>(new Set());
   const [assignedRepFilter, setAssignedRepFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"created" | "updated" | "status">("updated");
+  const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated");
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Subscribe to Supabase Realtime for leads table updates
   useEffect(() => {
     const supabase = createClient();
 
-    // Subscribe to INSERT, UPDATE, DELETE events on leads table
     const channel = supabase
       .channel('leads-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'leads',
         },
         (payload) => {
           console.log('[realtime] Lead changed:', payload.eventType, payload.new || payload.old);
-          // Refresh the page data to get latest leads
           router.refresh();
         }
       )
@@ -87,7 +107,6 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
         console.log('[realtime] Subscription status:', status);
       });
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
@@ -99,66 +118,56 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     return Array.from(unique).sort();
   }, [initialLeads]);
 
-  const leadTypes = useMemo(() => {
-    const unique = new Set<string>();
-    initialLeads.forEach((lead) => {
-      // Get types from intents array
-      if (lead.intents && lead.intents.length > 0) {
-        lead.intents.forEach(intent => unique.add(intent));
+  // Toggle intent filter
+  const toggleIntentFilter = (intent: string) => {
+    setIntentFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(intent)) {
+        next.delete(intent);
+      } else {
+        next.add(intent);
       }
-      // Also include lead_type if exists
-      if (lead.lead_type) {
-        unique.add(lead.lead_type);
-      }
+      return next;
     });
-    return Array.from(unique).sort();
-  }, [initialLeads]);
-
-  const sources = useMemo(() => {
-    const unique = new Set(initialLeads.map((lead) => lead.source || "").filter(Boolean));
-    return Array.from(unique).sort();
-  }, [initialLeads]);
+  };
 
   // Client-side filtering
   const filteredLeads = useMemo(() => {
     let filtered = initialLeads;
 
-      // Search filter (name, email, phone, org, lead_id)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter((lead) => {
-          const name = lead.name?.toLowerCase() || "";
-          const email = lead.email?.toLowerCase() || "";
-          const phone = lead.phone?.toLowerCase() || "";
-          const organization = lead.organization?.toLowerCase() || "";
-          const leadId = lead.lead_id?.toLowerCase() || "";
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((lead) => {
+        const name = lead.name?.toLowerCase() || "";
+        const email = lead.email?.toLowerCase() || "";
+        const phone = lead.phone?.toLowerCase() || "";
+        const organization = lead.organization?.toLowerCase() || "";
+        const leadId = lead.lead_id?.toLowerCase() || "";
 
-          return (
-            name.includes(query) ||
-            email.includes(query) ||
-            phone.includes(query) ||
-            organization.includes(query) ||
-            leadId.includes(query)
-          );
-        });
-      }
+        return (
+          name.includes(query) ||
+          email.includes(query) ||
+          phone.includes(query) ||
+          organization.includes(query) ||
+          leadId.includes(query)
+        );
+      });
+    }
 
     // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((lead) => (lead.status || "").toLowerCase() === statusFilter.toLowerCase());
     }
 
-    // Lead type/Intent filter
-    if (leadTypeFilter !== "all") {
+    // Intent filter (OR logic - show if ANY selected intent matches)
+    if (intentFilters.size > 0) {
       filtered = filtered.filter((lead) => {
-        // Check intents array first
-        if (lead.intents && lead.intents.length > 0) {
-          return lead.intents.some(intent => 
-            intent.toLowerCase() === leadTypeFilter.toLowerCase()
-          );
-        }
-        // Fallback to lead_type
-        return (lead.lead_type || "").toLowerCase() === leadTypeFilter.toLowerCase();
+        const intents = buildIntents(lead);
+        // Check if lead has ANY of the selected intents
+        return Array.from(intentFilters).some((selectedIntent) =>
+          intents.includes(selectedIntent)
+        );
       });
     }
 
@@ -171,66 +180,54 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
       }
     }
 
-    // Source filter
-    if (sourceFilter !== "all") {
-      filtered = filtered.filter((lead) => (lead.source || "").toLowerCase() === sourceFilter.toLowerCase());
-    }
-
     // Apply sorting
     if (sortBy === "created") {
       filtered.sort((a, b) => {
-        const dateA = new Date(a.created_at || a.submission_date || 0).getTime();
-        const dateB = new Date(b.created_at || b.submission_date || 0).getTime();
+        const dateA = new Date(a.submission_date || a.created_at || 0).getTime();
+        const dateB = new Date(b.submission_date || b.created_at || 0).getTime();
         return dateB - dateA; // Newest first
       });
-    } else if (sortBy === "status") {
+    } else if (sortBy === "name") {
       filtered.sort((a, b) => {
-        const statusA = (a.status || "").toLowerCase();
-        const statusB = (b.status || "").toLowerCase();
-        return statusA.localeCompare(statusB);
+        const nameA = (a.name || a.customer_name || "").toLowerCase();
+        const nameB = (b.name || b.customer_name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
       });
     } else {
       // Default: updated (latest first)
       filtered.sort((a, b) => {
         const dateA = new Date(a.updated_at || a.last_activity_at || a.created_at || a.submission_date || 0).getTime();
         const dateB = new Date(b.updated_at || b.last_activity_at || b.created_at || b.submission_date || 0).getTime();
-        return dateB - dateA; // Newest first
+        return dateB - dateA;
       });
     }
 
     return filtered;
-  }, [initialLeads, searchQuery, statusFilter, leadTypeFilter, assignedRepFilter, sourceFilter, sortBy]);
+  }, [initialLeads, searchQuery, statusFilter, intentFilters, assignedRepFilter, sortBy]);
 
   // Filter presets
   const applyPreset = (preset: string) => {
     setActivePreset(preset);
     if (preset === "my-leads") {
-      // This would need current user ID - for now, clear other filters
       setStatusFilter("all");
-      setLeadTypeFilter("all");
-      setSourceFilter("all");
+      setIntentFilters(new Set());
       setAssignedRepFilter("all");
     } else if (preset === "unassigned") {
       setAssignedRepFilter("unassigned");
       setStatusFilter("all");
-      setLeadTypeFilter("all");
-      setSourceFilter("all");
+      setIntentFilters(new Set());
     } else if (preset === "new-today") {
-      // Filter by created today
       setStatusFilter("New");
-      setLeadTypeFilter("all");
-      setSourceFilter("all");
+      setIntentFilters(new Set());
       setAssignedRepFilter("all");
     } else if (preset === "needs-follow-up") {
-      // This will be handled in the filtering logic - leads updated more than 48h ago and not completed
       setStatusFilter("all");
-      setLeadTypeFilter("all");
-      setSourceFilter("all");
+      setIntentFilters(new Set());
       setAssignedRepFilter("all");
     }
   };
 
-  // Apply needs-follow-up filter in the filteredLeads logic
+  // Apply needs-follow-up filter
   const filteredWithPresets = useMemo(() => {
     let result = filteredLeads;
     
@@ -241,7 +238,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     } else if (activePreset === "new-today") {
       const today = new Date().toDateString();
       result = result.filter((lead) => {
-        const createdDate = new Date(lead.created_at || lead.submission_date || 0).toDateString();
+        const createdDate = new Date(lead.submission_date || lead.created_at || 0).toDateString();
         return createdDate === today && (lead.status || "").toLowerCase() === "new";
       });
     } else if (activePreset === "needs-follow-up") {
@@ -262,14 +259,13 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
   function clearFilters() {
     setSearchQuery("");
     setStatusFilter("all");
-    setLeadTypeFilter("all");
+    setIntentFilters(new Set());
     setAssignedRepFilter("all");
-    setSourceFilter("all");
     setSortBy("updated");
     setActivePreset(null);
   }
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || leadTypeFilter !== "all" || assignedRepFilter !== "all" || sourceFilter !== "all";
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || intentFilters.size > 0 || assignedRepFilter !== "all";
 
   const formatDate = (dateString: string) => {
     try {
@@ -298,11 +294,127 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
       if (diffHours < 24) return `${diffHours}h ago`;
       if (diffDays < 7) return `${diffDays}d ago`;
       
-      // For older dates, show formatted date
       return formatDate(dateString);
     } catch {
       return dateString;
     }
+  };
+
+  // Mobile filters component
+  const MobileFilters = () => (
+    <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="sm:hidden min-h-[44px] gap-2">
+          <Filter className="h-4 w-4" />
+          Filters
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          {/* Status Filter */}
+          <div className="space-y-3">
+            <Label>Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Intent Filters */}
+          <div className="space-y-3">
+            <Label>Intents</Label>
+            <div className="space-y-2">
+              {["Quote", "Booking", "Question"].map((intent) => (
+                <div key={intent} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`intent-${intent}`}
+                    checked={intentFilters.has(intent)}
+                    onCheckedChange={() => toggleIntentFilter(intent)}
+                  />
+                  <Label htmlFor={`intent-${intent}`} className="font-normal cursor-pointer">
+                    {intent}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Assigned Rep Filter */}
+          {reps.length > 0 && (
+            <div className="space-y-3">
+              <Label>Assigned Rep</Label>
+              <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Reps" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Reps</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {reps.map((rep) => (
+                    <SelectItem key={rep.id} value={rep.id}>
+                      {rep.name || rep.email || rep.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Sort */}
+          <div className="space-y-3">
+            <Label>Sort by</Label>
+            <Select value={sortBy} onValueChange={(value: "updated" | "created" | "name") => setSortBy(value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated">Updated</SelectItem>
+                <SelectItem value="created">Created</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {hasActiveFilters && (
+            <Button variant="outline" onClick={clearFilters} className="w-full">
+              <X className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
+  // Intent chips component
+  const IntentChips = ({ lead }: { lead: DisplayLead }) => {
+    const intents = buildIntents(lead);
+    if (intents.length === 0) return <span className="text-muted-foreground">—</span>;
+    
+    return (
+      <div className="flex flex-wrap gap-1">
+        {intents.map((intent) => (
+          <span
+            key={intent}
+            className="inline-flex items-center rounded-md bg-primary/10 text-primary px-2 py-1 text-xs font-medium"
+          >
+            {intent}
+          </span>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -343,7 +455,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3">
+      {/* Desktop Filters */}
+      <div className="hidden sm:flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Input
             type="search"
@@ -365,21 +478,26 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
               ))}
             </SelectContent>
           </Select>
-          {leadTypes.length > 0 && (
-            <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
-              <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-                <SelectValue placeholder="Lead Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {leadTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          
+          {/* Intent Filters - Desktop */}
+          <div className="flex items-center gap-3 min-h-[44px] px-3 border rounded-md bg-background">
+            <Label className="text-sm font-medium whitespace-nowrap">Intents:</Label>
+            <div className="flex gap-3">
+              {["Quote", "Booking", "Question"].map((intent) => (
+                <div key={intent} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`desktop-intent-${intent}`}
+                    checked={intentFilters.has(intent)}
+                    onCheckedChange={() => toggleIntentFilter(intent)}
+                  />
+                  <Label htmlFor={`desktop-intent-${intent}`} className="text-sm font-normal cursor-pointer whitespace-nowrap">
+                    {intent}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {reps.length > 0 && (
             <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter}>
               <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
@@ -388,39 +506,26 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
               <SelectContent>
                 <SelectItem value="all">All Reps</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {reps.map((rep) => (
-                    <SelectItem key={rep.id} value={rep.id}>
-                      {rep.name || rep.email || rep.id}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          )}
-          {sources.length > 0 && (
-            <Select value={sourceFilter} onValueChange={setSourceFilter}>
-              <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
-                {sources.map((source) => (
-                  <SelectItem key={source} value={source}>
-                    {source}
+                {reps.map((rep) => (
+                  <SelectItem key={rep.id} value={rep.id}>
+                    {rep.name || rep.email || rep.id}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          <Select value={sortBy} onValueChange={(value: "created" | "updated" | "status") => setSortBy(value)}>
+          
+          <Select value={sortBy} onValueChange={(value: "updated" | "created" | "name") => setSortBy(value)}>
             <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-              <SelectValue placeholder="Sort By" />
+              <SelectValue placeholder="Sort by:" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="updated">Latest Updated</SelectItem>
-              <SelectItem value="created">Latest Created</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
+              <SelectItem value="updated">Updated</SelectItem>
+              <SelectItem value="created">Created</SelectItem>
+              <SelectItem value="name">Name</SelectItem>
             </SelectContent>
           </Select>
+          
           {hasActiveFilters && (
             <Button
               variant="outline"
@@ -434,16 +539,28 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
         </div>
       </div>
 
-      {/* Responsive table wrapper - horizontal scroll on mobile */}
-      <div className="overflow-x-auto -mx-4 md:mx-0">
+      {/* Mobile Filters */}
+      <div className="sm:hidden flex gap-2">
+        <Input
+          type="search"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="min-h-[44px] flex-1"
+        />
+        <MobileFilters />
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto -mx-4 md:mx-0">
         <div className="inline-block min-w-full align-middle">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Lead ID</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Lead Type</TableHead>
-                <TableHead className="hidden md:table-cell">Status</TableHead>
+                <TableHead>Intents</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Assigned Rep</TableHead>
                 <TableHead className="hidden lg:table-cell">Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -464,7 +581,6 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                     key={lead.id || lead.lead_id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={(e) => {
-                      // Only navigate if clicking on the row, not on buttons/links
                       const target = e.target as HTMLElement;
                       if (!target.closest('a') && !target.closest('button')) {
                         window.location.href = `/leads/${lead.lead_id}`;
@@ -481,29 +597,12 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                       </Link>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {lead.name || <span className="text-muted-foreground">—</span>}
+                      {lead.name || lead.customer_name || <span className="text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {lead.intents && lead.intents.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {lead.intents.map((intent) => (
-                            <span
-                              key={intent}
-                              className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium"
-                            >
-                              {intent}
-                            </span>
-                          ))}
-                        </div>
-                      ) : lead.lead_type ? (
-                        <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                          {lead.lead_type}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell>
+                      <IntentChips lead={lead} />
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
+                    <TableCell>
                       <StatusBadge 
                         status={
                           ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as 
@@ -534,6 +633,80 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
             </TableBody>
           </Table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-3">
+        {filteredWithPresets.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              {hasActiveFilters || activePreset
+                ? "No leads found matching your filters."
+                : "No leads yet."}
+            </CardContent>
+          </Card>
+        ) : (
+          filteredWithPresets.map((lead) => (
+            <Card 
+              key={lead.id || lead.lead_id}
+              className="cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => window.location.href = `/leads/${lead.lead_id}`}
+            >
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-base truncate">
+                        {lead.name || lead.customer_name || "—"}
+                      </h3>
+                      {lead.organization && (
+                        <p className="text-sm text-muted-foreground truncate">{lead.organization}</p>
+                      )}
+                    </div>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Link href={`/leads/${lead.lead_id}`} onClick={(e) => e.stopPropagation()}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-mono">{lead.lead_id}</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <IntentChips lead={lead} />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <StatusBadge 
+                      status={
+                        ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as 
+                        "new" | "assigned" | "contacted" | "quote_sent" | "quote_approved" | "in_production" | "completed" | "lost"
+                      } 
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      {lead.assigned_rep_name || lead.assigned_rep_id ? (
+                        <span>{lead.assigned_rep_name || lead.assigned_rep_id}</span>
+                      ) : (
+                        <span>Unassigned</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Updated {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );

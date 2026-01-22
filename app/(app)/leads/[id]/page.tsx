@@ -331,7 +331,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               {lead.intents.map((intent) => (
                 <span
                   key={intent}
-                  className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                  className="inline-flex items-center rounded-md bg-primary/10 text-primary px-2 py-1 text-xs font-medium"
                 >
                   {intent}
                 </span>
