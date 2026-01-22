@@ -1,6 +1,6 @@
 /**
- * Lead type derived from spreadsheet columns
- * All fields are optional/nullable to handle various spreadsheet formats
+ * Lead type derived from Supabase leads table
+ * All fields are optional/nullable to handle various data formats
  */
 export interface Lead {
   // Core identifiers
@@ -8,6 +8,7 @@ export interface Lead {
   lead_id: string;
   
   // Contact information
+  customer_name?: string | null;
   name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -17,8 +18,16 @@ export interface Lead {
   status?: string | null;
   lead_type?: string | null;
   source?: string | null;
+  sales_status?: string | null;
+  payment_status?: string | null;
+  production_stage?: string | null;
   
-  // Intents (multi-intent support)
+  // Intent flags (used to build intents array)
+  has_requested_quote?: boolean | null;
+  has_booked_call?: boolean | null;
+  has_asked_question?: boolean | null;
+  
+  // Intents (multi-intent support - built from flags)
   intents?: string[]; // Array of: "Quote", "Booking", "Question"
   
   // Assignment
@@ -29,16 +38,45 @@ export interface Lead {
   created_at?: string | null;
   updated_at?: string | null;
   submission_date?: string | null;
+  last_modified?: string | null;
+  last_modified_by?: string | null;
   last_activity_at?: string | null;
   last_intent_at?: string | null;
+  date_approved?: string | null;
+  delivery_date?: string | null;
+  date_delivered_collected?: string | null;
+  date_completed?: string | null;
   
-  // Request data (various formats)
+  // Quote/Product fields
+  category?: string | null;
+  product_type?: string | null;
+  accessories_selected?: string | null;
+  include_warmups?: string | null;
+  quantity_range?: string | null;
+  has_deadline?: string | null;
+  message?: string | null;
+  design_notes?: string | null;
+  attachments?: string | string[] | null;
+  trello_product_list?: string | null;
+  
+  // Booking fields
+  booking_time?: string | null;
+  booking_approved?: string | null;
+  pre_call_notes?: string | null;
+  
+  // Question fields
   question?: string | null;
+  
+  // Request data (JSONB fields)
   question_data?: Record<string, unknown> | null;
   quote_data?: Record<string, unknown> | null;
   booking_data?: Record<string, unknown> | null;
   
-  // Additional fields (catch-all for any other spreadsheet columns)
+  // Trello
+  card_id?: string | null;
+  card_created?: boolean | null;
+  
+  // Additional fields (catch-all for any other columns)
   [key: string]: unknown;
 }
 

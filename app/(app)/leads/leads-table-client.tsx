@@ -42,8 +42,9 @@ interface DisplayLead extends Lead {
 }
 
 interface Rep {
-  user_id: string;
-  full_name: string | null;
+  id: string;
+  name: string | null;
+  email?: string | null;
 }
 
 interface LeadsTableClientProps {
@@ -387,11 +388,11 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
               <SelectContent>
                 <SelectItem value="all">All Reps</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                {reps.map((rep) => (
-                  <SelectItem key={rep.user_id} value={rep.user_id}>
-                    {rep.full_name || rep.user_id}
-                  </SelectItem>
-                ))}
+                  {reps.map((rep) => (
+                    <SelectItem key={rep.id} value={rep.id}>
+                      {rep.name || rep.email || rep.id}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           )}

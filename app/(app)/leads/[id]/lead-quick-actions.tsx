@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Phone, Mail, Copy, Check } from "lucide-react";
+import { Phone, Mail, Copy, Check, ExternalLink } from "lucide-react";
+import { getTrelloCardUrl } from "@/lib/trello";
+import { TrelloCreateButton } from "./trello-create-button";
 
 interface LeadQuickActionsProps {
   phone: string | null;
   email: string | null;
   leadId: string;
   name: string | null;
+  cardId?: string | null;
 }
 
 export function LeadQuickActions({
@@ -16,6 +19,7 @@ export function LeadQuickActions({
   email,
   leadId,
   name,
+  cardId,
 }: LeadQuickActionsProps) {
   const [copied, setCopied] = useState(false);
 
@@ -34,6 +38,8 @@ export function LeadQuickActions({
       setTimeout(() => setCopied(false), 2000);
     });
   }
+
+  const trelloCardUrl = cardId ? getTrelloCardUrl(cardId) : null;
 
   return (
     <div className="flex flex-wrap gap-2 pb-2 border-b">
@@ -81,6 +87,22 @@ export function LeadQuickActions({
           </>
         )}
       </Button>
+      {cardId && trelloCardUrl && (
+        <Button
+          variant="outline"
+          size="sm"
+          asChild
+          className="min-h-[44px] gap-2"
+        >
+          <a href={trelloCardUrl} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-4 w-4" />
+            <span>Open Trello Card</span>
+          </a>
+        </Button>
+      )}
+      {!cardId && (
+        <TrelloCreateButton leadId={leadId} leadName={name} />
+      )}
     </div>
   );
 }
