@@ -50,6 +50,7 @@ interface LeadRow {
   design_notes: string | null;
   attachments: string | null;
   message: string | null;
+  trello_product_list: string | null;
   booking_time: string | null;
   booking_approved: string | null;
   pre_call_notes: string | null;
@@ -101,68 +102,51 @@ function isQuestionType(leadType: string | null): boolean {
 }
 
 /**
- * Infer quote intent from field data
+ * Infer quote intent from field data (STRONG EVIDENCE ONLY)
+ * Quote evidence (strong): quote_data not null OR attachments not null 
+ * OR category/product_type not null OR quantity_range not null 
+ * OR has_deadline true OR include_warmups true 
+ * OR design_notes/message not null OR trello_product_list not null 
+ * OR delivery_date not null
  */
 function inferQuoteIntent(lead: LeadRow): boolean {
-  // Check if any quote-related fields have data
   return !!(
-    lead.delivery_date ||
+    (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0) ||
+    lead.attachments ||
     lead.category ||
     lead.product_type ||
-    lead.accessories_selected ||
-    lead.include_warmups ||
     lead.quantity_range ||
-    lead.has_deadline ||
+    (lead.has_deadline && lead.has_deadline !== 'false' && lead.has_deadline !== '') ||
+    (lead.include_warmups && lead.include_warmups !== 'false' && lead.include_warmups !== '') ||
     lead.design_notes ||
-    lead.attachments ||
-    (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0) ||
-    // Also check if message field contains quote-related keywords
-    (lead.message && typeof lead.message === 'string' && (
-      lead.message.toLowerCase().includes('quote') ||
-      lead.message.toLowerCase().includes('price') ||
-      lead.message.toLowerCase().includes('cost') ||
-      lead.message.toLowerCase().includes('pricing')
-    ))
+    lead.message ||
+    lead.trello_product_list ||
+    lead.delivery_date
   );
 }
 
 /**
- * Infer booking intent from field data
+ * Infer booking intent from field data (STRONG EVIDENCE ONLY)
+ * Booking evidence (strong): booking_time not null OR booking_approved true 
+ * OR booking_data not null OR pre_call_notes not null
  */
 function inferBookingIntent(lead: LeadRow): boolean {
   return !!(
     lead.booking_time ||
-    lead.booking_approved ||
+    (lead.booking_approved && lead.booking_approved !== 'false' && lead.booking_approved !== '') ||
     (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0) ||
-    lead.pre_call_notes ||
-    // Also check if message field contains booking-related keywords
-    (lead.message && typeof lead.message === 'string' && (
-      lead.message.toLowerCase().includes('book') ||
-      lead.message.toLowerCase().includes('call') ||
-      lead.message.toLowerCase().includes('schedule') ||
-      lead.message.toLowerCase().includes('appointment')
-    ))
+    lead.pre_call_notes
   );
 }
 
 /**
- * Infer question intent from field data
+ * Infer question intent from field data (STRONG EVIDENCE ONLY)
+ * Question evidence (strong): question not null OR question_data not null
  */
 function inferQuestionIntent(lead: LeadRow): boolean {
   return !!(
     lead.question ||
-    (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0) ||
-    // Also check if message field contains question-related keywords
-    (lead.message && typeof lead.message === 'string' && (
-      lead.message.toLowerCase().includes('?') ||
-      lead.message.toLowerCase().includes('how') ||
-      lead.message.toLowerCase().includes('what') ||
-      lead.message.toLowerCase().includes('when') ||
-      lead.message.toLowerCase().includes('where') ||
-      lead.message.toLowerCase().includes('why') ||
-      lead.message.toLowerCase().includes('can you') ||
-      lead.message.toLowerCase().includes('do you')
-    ))
+    (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0)
   );
 }
 
@@ -191,7 +175,7 @@ function normalizeLeadIntents(lead: LeadRow): {
   }
 
   // Infer from field data (only upgrade false->true)
-  // This is the PRIMARY way to set intents - if data exists, set the intent
+  // STRICT: Only set if strong evidence exists (no "at least one" fallback)
   if (!hasQuote && inferQuoteIntent(lead)) {
     hasQuote = true;
   }
@@ -202,18 +186,8 @@ function normalizeLeadIntents(lead: LeadRow): {
     hasQuestion = true;
   }
   
-  // IMPORTANT: If a lead has NO intents set but has ANY data, we should infer at least one
-  // This handles cases where leads have data but flags weren't set
-  if (!hasQuote && !hasBooking && !hasQuestion) {
-    // If lead has any quote data, default to Quote
-    if (inferQuoteIntent(lead)) {
-      hasQuote = true;
-    } else if (inferBookingIntent(lead)) {
-      hasBooking = true;
-    } else if (inferQuestionIntent(lead)) {
-      hasQuestion = true;
-    }
-  }
+  // DO NOT set "at least one intent" unless strong evidence exists
+  // This is handled by the individual inference functions above
 
   return {
     has_requested_quote: hasQuote,
@@ -250,6 +224,7 @@ async function normalizeIntents(dryRun: boolean = false) {
       design_notes,
       attachments,
       message,
+      trello_product_list,
       booking_time,
       booking_approved,
       pre_call_notes,

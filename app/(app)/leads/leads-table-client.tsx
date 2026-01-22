@@ -65,7 +65,9 @@ interface LeadsTableClientProps {
 }
 
 /**
- * Build intents array from boolean fields and field data
+ * Build intents array from boolean fields ONLY (flags are source of truth)
+ * TEMPORARY FALLBACK: Only infer from field data if ALL 3 flags are false
+ * TODO: Remove fallback after all leads are normalized
  */
 function buildIntents(lead: DisplayLead): string[] {
   const intents: string[] = [];
@@ -73,40 +75,43 @@ function buildIntents(lead: DisplayLead): string[] {
   if (lead.has_booked_call) intents.push("Booking");
   if (lead.has_asked_question) intents.push("Question");
   
-  // Also infer from field data if flags are false but data exists
-  if (!lead.has_requested_quote) {
-    const hasQuoteData = !!(
+  // TEMPORARY FALLBACK: Only infer if ALL 3 flags are false (legacy leads)
+  if (!lead.has_requested_quote && !lead.has_booked_call && !lead.has_asked_question) {
+    // Strong evidence for Quote
+    const hasQuoteEvidence = !!(
+      (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0) ||
+      lead.attachments ||
       lead.category ||
       lead.product_type ||
-      lead.accessories_selected ||
-      lead.include_warmups ||
       lead.quantity_range ||
-      lead.has_deadline ||
+      (lead.has_deadline && lead.has_deadline !== 'false' && lead.has_deadline !== '') ||
+      (lead.include_warmups && lead.include_warmups !== 'false' && lead.include_warmups !== '') ||
       lead.design_notes ||
-      lead.attachments ||
-      (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0)
+      lead.message ||
+      lead.trello_product_list ||
+      lead.delivery_date
     );
-    if (hasQuoteData) intents.push("Quote");
-  }
-  
-  if (!lead.has_booked_call) {
-    const hasBookingData = !!(
+    
+    // Strong evidence for Booking
+    const hasBookingEvidence = !!(
       lead.booking_time ||
-      lead.booking_approved ||
-      (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0)
+      (lead.booking_approved && lead.booking_approved !== 'false' && lead.booking_approved !== '') ||
+      (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0) ||
+      lead.pre_call_notes
     );
-    if (hasBookingData) intents.push("Booking");
-  }
-  
-  if (!lead.has_asked_question) {
-    const hasQuestionData = !!(
+    
+    // Strong evidence for Question
+    const hasQuestionEvidence = !!(
       lead.question ||
       (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0)
     );
-    if (hasQuestionData) intents.push("Question");
+    
+    if (hasQuoteEvidence) intents.push("Quote");
+    if (hasBookingEvidence) intents.push("Booking");
+    if (hasQuestionEvidence) intents.push("Question");
   }
   
-  // Remove duplicates and ensure only canonical intents (no "Quote Request", etc.)
+  // Ensure only canonical intents (no duplicates)
   return Array.from(new Set(intents)).filter(intent => 
     ["Quote", "Booking", "Question"].includes(intent)
   );
@@ -231,11 +236,11 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
         return nameA.localeCompare(nameB);
       });
     } else {
-      // Default: updated (latest first)
+      // Default: updated (uses updated_at)
       filtered.sort((a, b) => {
-        const dateA = new Date(a.updated_at || a.last_activity_at || a.created_at || a.submission_date || 0).getTime();
-        const dateB = new Date(b.updated_at || b.last_activity_at || b.created_at || b.submission_date || 0).getTime();
-        return dateB - dateA;
+        const dateA = new Date(a.updated_at || 0).getTime();
+        const dateB = new Date(b.updated_at || 0).getTime();
+        return dateB - dateA; // Newest first
       });
     }
 

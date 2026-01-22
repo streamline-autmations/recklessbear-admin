@@ -195,47 +195,52 @@ async function getLead(id: string): Promise<Lead | null> {
     assignedRepName = user?.name || user?.email || null;
   }
 
-  // Build intents array from flags (canonical 3 intents only)
+  // Build intents array from flags ONLY (canonical 3 intents)
+  // Flags are the source of truth after normalization
   const intents: string[] = [];
   if (data.has_requested_quote) intents.push("Quote");
   if (data.has_booked_call) intents.push("Booking");
   if (data.has_asked_question) intents.push("Question");
   
-  // Also infer from field data if flags are false but data exists
-  if (!data.has_requested_quote) {
-    const hasQuoteData = !!(
-      data.delivery_date ||
+  // TEMPORARY FALLBACK: Only infer from field data if ALL 3 flags are false
+  // This is for legacy leads that haven't been normalized yet
+  // TODO: Remove this fallback after all leads are normalized
+  if (!data.has_requested_quote && !data.has_booked_call && !data.has_asked_question) {
+    // Strong evidence for Quote
+    const hasQuoteEvidence = !!(
+      (data.quote_data && typeof data.quote_data === 'object' && data.quote_data && Object.keys(data.quote_data).length > 0) ||
+      data.attachments ||
       data.category ||
       data.product_type ||
-      data.accessories_selected ||
-      data.include_warmups ||
       data.quantity_range ||
-      data.has_deadline ||
+      (data.has_deadline && data.has_deadline !== 'false' && data.has_deadline !== '') ||
+      (data.include_warmups && data.include_warmups !== 'false' && data.include_warmups !== '') ||
       data.design_notes ||
-      data.attachments ||
-      (data.quote_data && Object.keys(data.quote_data).length > 0)
+      data.message ||
+      data.trello_product_list ||
+      data.delivery_date
     );
-    if (hasQuoteData) intents.push("Quote");
-  }
-  
-  if (!data.has_booked_call) {
-    const hasBookingData = !!(
+    
+    // Strong evidence for Booking
+    const hasBookingEvidence = !!(
       data.booking_time ||
-      data.booking_approved ||
-      (data.booking_data && Object.keys(data.booking_data).length > 0)
+      (data.booking_approved && data.booking_approved !== 'false' && data.booking_approved !== '') ||
+      (data.booking_data && typeof data.booking_data === 'object' && data.booking_data && Object.keys(data.booking_data).length > 0) ||
+      data.pre_call_notes
     );
-    if (hasBookingData) intents.push("Booking");
-  }
-  
-  if (!data.has_asked_question) {
-    const hasQuestionData = !!(
+    
+    // Strong evidence for Question
+    const hasQuestionEvidence = !!(
       data.question ||
-      (data.question_data && Object.keys(data.question_data).length > 0)
+      (data.question_data && typeof data.question_data === 'object' && data.question_data && Object.keys(data.question_data).length > 0)
     );
-    if (hasQuestionData) intents.push("Question");
+    
+    if (hasQuoteEvidence) intents.push("Quote");
+    if (hasBookingEvidence) intents.push("Booking");
+    if (hasQuestionEvidence) intents.push("Question");
   }
   
-  // Remove duplicates and ensure only canonical intents
+  // Ensure only canonical intents (no duplicates)
   const canonicalIntents = Array.from(new Set(intents)).filter(intent => 
     ["Quote", "Booking", "Question"].includes(intent)
   );

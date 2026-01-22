@@ -487,6 +487,37 @@ async function upsertLeads(dryRun: boolean = false) {
         console.log(
           `✅ Batch ${batchNum}/${totalBatches}: ${batch.length} leads (${newInBatch} new, ${updatedInBatch} updated)`
         );
+        
+        // Auto-assign new leads that don't have assigned_rep_id
+        if (newInBatch > 0) {
+          const newLeadIds = batch
+            .filter((l) => !existingIds.has(l.lead_id as string))
+            .map((l) => l.lead_id as string);
+          
+          for (const leadId of newLeadIds) {
+            try {
+              const { data: lead } = await supabase
+                .from("leads")
+                .select("assigned_rep_id")
+                .eq("lead_id", leadId)
+                .single();
+              
+              if (lead && !lead.assigned_rep_id) {
+                // Call RPC function to auto-assign
+                const { data: assignedRepId, error: assignError } = await supabase
+                  .rpc("assign_lead_auto", { p_lead_id: leadId });
+                
+                if (assignError) {
+                  console.warn(`   ⚠️  Could not auto-assign lead ${leadId}: ${assignError.message}`);
+                } else if (assignedRepId) {
+                  console.log(`   ✓ Auto-assigned lead ${leadId} to rep ${assignedRepId}`);
+                }
+              }
+            } catch (error) {
+              console.warn(`   ⚠️  Error auto-assigning lead ${leadId}:`, error);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error(`❌ Batch ${batchNum}/${totalBatches} error:`, error);

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction } from "./actions";
+import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, autoAssignLeadAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { TrelloCreateButton } from "./trello-create-button";
 import type { Lead } from "@/types/leads";
@@ -182,6 +182,23 @@ export function LeadDetailClient({
     });
   }
 
+  const [isAutoAssignPending, startAutoAssignTransition] = useTransition();
+
+  function handleAutoAssign() {
+    startAutoAssignTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", lead.id || leadId);
+
+      const result = await autoAssignLeadAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+      } else if (result && "repId" in result) {
+        router.refresh();
+        toast.success("Lead auto-assigned successfully");
+      }
+    });
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Actions: Status and Rep Assignment */}
@@ -216,24 +233,42 @@ export function LeadDetailClient({
               </div>
               {isCeoOrAdmin && (
                 <div className="space-y-2 flex-1">
-                  <Label htmlFor="rep">Assigned Rep</Label>
-                  <Select
-                    value={selectedRepId}
-                    onValueChange={handleAssignRep}
-                    disabled={isRepPending}
-                  >
-                    <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
-                      <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                        {reps.map((rep) => (
-                          <SelectItem key={rep.id} value={rep.id}>
-                            {rep.name || rep.email || rep.id}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Label htmlFor="rep">Assigned Rep</Label>
+                      <Select
+                        value={selectedRepId}
+                        onValueChange={handleAssignRep}
+                        disabled={isRepPending}
+                      >
+                        <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                            {reps.map((rep) => (
+                              <SelectItem key={rep.id} value={rep.id}>
+                                {rep.name || rep.email || rep.id}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {!lead.assigned_rep_id && (
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAutoAssign}
+                          disabled={isAutoAssignPending || isRepPending}
+                          className="min-h-[44px] whitespace-nowrap"
+                        >
+                          {isAutoAssignPending ? "Assigning..." : "Auto-Assign"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {repError && (
                     <p className="text-sm text-destructive">{repError}</p>
                   )}

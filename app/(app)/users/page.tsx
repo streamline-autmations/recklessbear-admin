@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { UsersTableClient } from "./users-table-client";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 interface Profile {
   user_id: string;
@@ -52,9 +54,16 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Users</h1>
-        <p className="text-muted-foreground">Manage user profiles and roles.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Users</h1>
+          <p className="text-muted-foreground">Manage user profiles and roles.</p>
+        </div>
+        {userRole === "ceo" && (
+          <Button asChild className="min-h-[44px]">
+            <Link href="/users/new">Create User</Link>
+          </Button>
+        )}
       </div>
       <Card>
         <CardHeader>

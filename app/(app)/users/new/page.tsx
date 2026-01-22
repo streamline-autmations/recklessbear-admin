@@ -1,0 +1,36 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { CreateUserForm } from "./create-user-form";
+
+async function getCurrentUserRole(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  return data?.role || null;
+}
+
+export default async function CreateUserPage() {
+  const userRole = await getCurrentUserRole();
+  
+  // Only CEO can create users
+  if (userRole !== "ceo") {
+    redirect("/users");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Create User</h1>
+        <p className="text-muted-foreground">Invite a new user to the system.</p>
+      </div>
+      <CreateUserForm />
+    </div>
+  );
+}

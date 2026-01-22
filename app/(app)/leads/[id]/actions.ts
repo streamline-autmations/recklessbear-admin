@@ -421,3 +421,79 @@ export async function createTrelloCardAction(
 
   revalidatePath(`/leads/${lead.lead_id}`);
 }
+
+const autoAssignLeadSchema = z.object({
+  leadId: z.string().uuid(),
+});
+
+export async function autoAssignLeadAction(
+  formData: FormData
+): Promise<{ error?: string; repId?: string } | void> {
+  const rawFormData = {
+    leadId: formData.get("leadId") as string,
+  };
+
+  const result = autoAssignLeadSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createClient();
+
+  // Get current user and check role
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Check if user is CEO/Admin
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can auto-assign leads" };
+  }
+
+  // Get lead to find lead_id (text field)
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select("lead_id")
+    .eq("id", result.data.leadId)
+    .single();
+
+  if (leadError || !lead) {
+    return { error: "Lead not found" };
+  }
+
+  // Call RPC function to auto-assign
+  const { data: assignedRepId, error: rpcError } = await supabase.rpc(
+    "assign_lead_auto",
+    { p_lead_id: lead.lead_id }
+  );
+
+  if (rpcError) {
+    return { error: rpcError.message || "Failed to auto-assign lead" };
+  }
+
+  if (!assignedRepId) {
+    return { error: "No rep available for assignment" };
+  }
+
+  // Insert event
+  await supabase.from("lead_events").insert({
+    lead_db_id: result.data.leadId,
+    actor_user_id: user.id,
+    event_type: "rep_auto_assigned",
+    payload: { repId: assignedRepId },
+  });
+
+  revalidatePath(`/leads/${lead.lead_id}`);
+  return { repId: assignedRepId };
+}
