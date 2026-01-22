@@ -26,22 +26,18 @@ This document explains how to set up the Supabase Database Webhook that will tri
 **Basic Settings:**
 - **Name**: `lead-assigned-to-rep`
 - **Table**: `leads`
-- **Events**: Check **"INSERT"** only (or both INSERT and UPDATE if you want to catch manual assignments too)
+- **Events**: Check **"INSERT"** and **"UPDATE"** (to catch both auto-assigned and manually assigned leads)
 
 **HTTP Request:**
+- **Type**: HTTP Request
 - **Method**: `POST`
 - **URL**: `https://dockerfile-1n82.onrender.com/webhook/supabase/lead-assigned`
-- **Headers**: 
+- **Timeout**: `10000` ms (10 seconds)
+- **HTTP Headers**: 
   - Key: `Content-Type`
   - Value: `application/json`
 
-**Filter SQL:**
-```sql
-assigned_rep_id IS NOT NULL AND rep_alert_sent = false
-```
-
-**Payload:**
-- Select **"Send entire record"** or **"Send entire record (JSON)"**
+**Note:** Supabase webhooks don't have a filter option in the UI. We'll filter in n8n instead (see n8n workflow setup below).
 
 ### 3. Save Webhook
 Click **"Save"** to create the webhook.
@@ -69,6 +65,28 @@ When a new lead is inserted and auto-assigned, Supabase will POST:
 }
 ```
 
+**For UPDATE events** (manual assignment), you'll also get:
+```json
+{
+  "type": "UPDATE",
+  "table": "leads",
+  "record": {
+    "id": "uuid-here",
+    "assigned_rep_id": "rep-uuid-here",
+    "rep_alert_sent": false,
+    ...
+  },
+  "old_record": {
+    "assigned_rep_id": null,
+    ...
+  }
+}
+```
+
+**Important:** n8n must filter to only process leads where:
+- `record.assigned_rep_id` is not null/empty
+- `record.rep_alert_sent` is false/null
+
 ## n8n Workflow Setup
 
 Your n8n workflow should:
@@ -76,26 +94,39 @@ Your n8n workflow should:
 1. **Receive Webhook** (Supabase POST)
    - Path: `/webhook/supabase/lead-assigned`
    - Method: POST
+   - **IMPORTANT**: Filter here - only process if:
+     - `record.assigned_rep_id IS NOT NULL`
+     - `record.rep_alert_sent === false` (or `!record.rep_alert_sent`)
 
-2. **Extract Lead Data**
+2. **IF Node (Filter)** - Only process matching leads
+   ```
+   Condition: 
+   - record.assigned_rep_id is not empty/null
+   - record.rep_alert_sent is false or null
+   ```
+   If condition fails, end workflow (don't send alert)
+
+3. **Extract Lead Data**
    - `record.assigned_rep_id` - The rep UUID
    - `record.lead_id` - The lead identifier
    - `record.customer_name` - Customer name
    - `record.email` - Customer email
+   - `record.id` - Lead database UUID (for updating flag)
 
-3. **Fetch Rep Details**
+4. **Fetch Rep Details**
    - Query Supabase `profiles` table by `user_id = assigned_rep_id`
    - Get rep's `email`, `phone`, `full_name`
 
-4. **Send Notification**
+5. **Send Notification**
    - Send WhatsApp/Email to rep
-   - Include lead details
+   - Include lead details (customer name, lead_id, etc.)
 
-5. **Update Lead Flag**
+6. **Update Lead Flag**
    - Update `leads` table:
      - Set `rep_alert_sent = true`
      - Set `rep_alert_sent_at = NOW()`
    - Use Supabase Admin API (service role key)
+   - Filter by `id = record.id` (use the UUID from the webhook payload)
 
 ## Testing
 
@@ -138,16 +169,20 @@ WHERE lead_id = 'TEST-AUTO-001';
 
 ## Important Notes
 
-### Why INSERT (not UPDATE) works:
-- The trigger runs **BEFORE INSERT**
-- When the lead is inserted, `assigned_rep_id` is already set
-- So the INSERT event includes the assigned rep
-- The webhook filter `assigned_rep_id IS NOT NULL AND rep_alert_sent = false` will match
+### Why this works:
+- The trigger runs **BEFORE INSERT**, so when the lead is inserted, `assigned_rep_id` is already set
+- The INSERT event includes the assigned rep in the payload
+- n8n filters to only process leads with `assigned_rep_id IS NOT NULL AND rep_alert_sent = false`
+- UPDATE events catch manual assignments (when someone uses the "Auto-Assign" button or manually assigns)
 
-### If you also want to catch manual assignments:
-- Add **UPDATE** event to the webhook
-- Filter: `assigned_rep_id IS NOT NULL AND rep_alert_sent = false`
-- This catches both auto-assigned (INSERT) and manually assigned (UPDATE) leads
+### Filtering in n8n (not Supabase):
+- Supabase webhooks don't have a filter option in the UI
+- We send ALL INSERT/UPDATE events to n8n
+- n8n workflow filters to only process relevant leads
+- This is actually better because:
+  - More flexible filtering logic
+  - Can see all events in n8n logs for debugging
+  - Easier to modify filter conditions without recreating webhook
 
 ### Duplicate Prevention:
 - The `rep_alert_sent = false` filter prevents duplicates
