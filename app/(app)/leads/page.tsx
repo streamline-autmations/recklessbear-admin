@@ -1,6 +1,4 @@
 ﻿import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { LeadsTableClient } from './leads-table-client';
 import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';

@@ -194,9 +194,6 @@ function mapCsvRowToLead(row: CsvRow): Record<string, unknown> {
   if (deadlineStr) quoteData.has_deadline = deadlineStr;
   // Try to parse delivery_date, or use deadlineStr if delivery_date is empty
   const finalDeliveryDate = deliveryDateStr ? parseDate(deliveryDateStr) : (deadlineStr ? parseDate(deadlineStr) : null);
-  if (finalDeliveryDate) {
-    lead.delivery_date = finalDeliveryDate;
-  }
   if (msg) quoteData.message = msg;
   if (design) quoteData.design_notes = design;
   if (attach) quoteData.attachments = attach;
@@ -248,7 +245,12 @@ function mapCsvRowToLead(row: CsvRow): Record<string, unknown> {
     last_modified_by: getValue("last_modified_by", "Last Modified By")?.trim() || "System Import",
     last_activity_at: parseDate(getValue("last_activity_at", "Last Activity At")) || lastModified || createdDate,
     date_approved: parseDate(getValue("date_approved", "Date Approved")),
-    delivery_date: parseDate(getValue("delivery_date", "Delivery Date")),
+    delivery_date: (() => {
+      // Try delivery_date first, then fallback to has_deadline if it's a date
+      const deliveryDateStr = getValue("delivery_date", "Delivery Date");
+      const deadlineStr = getValue("has_deadline", "Has Deadline");
+      return parseDate(deliveryDateStr) || (deadlineStr ? parseDate(deadlineStr) : null);
+    })(),
     date_delivered_collected: parseDate(getValue("date_delivered_collected", "Date Delivered/Collected")),
     date_completed: parseDate(getValue("date_completed", "Date Completed")),
     category: getValue("category", "Category") || null,

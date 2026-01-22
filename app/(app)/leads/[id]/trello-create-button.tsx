@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { createTrelloCardAction } from "./actions";
@@ -12,7 +12,7 @@ interface TrelloCreateButtonProps {
   leadName: string | null;
 }
 
-export function TrelloCreateButton({ leadId, leadName }: TrelloCreateButtonProps) {
+export function TrelloCreateButton({ leadId }: TrelloCreateButtonProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 

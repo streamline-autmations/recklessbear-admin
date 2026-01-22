@@ -117,9 +117,6 @@ export function LeadDetailClient({
     }
   }
 
-  function formatDate(dateString: string) {
-    return formatDateSafe(dateString);
-  }
 
   function formatPayload(payload: Record<string, unknown>): string {
     try {
