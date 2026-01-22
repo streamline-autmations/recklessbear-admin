@@ -65,6 +65,15 @@ interface LeadsTableClientProps {
 }
 
 /**
+ * Get rep name from assigned_rep_id
+ */
+function getRepName(lead: DisplayLead, reps: Rep[]): string | null {
+  if (!lead.assigned_rep_id) return null;
+  const rep = reps.find(r => r.id === lead.assigned_rep_id);
+  return rep?.name || rep?.email || null;
+}
+
+/**
  * Build intents array from boolean fields ONLY (flags are source of truth)
  * TEMPORARY FALLBACK: Only infer from field data if ALL 3 flags are false
  * TODO: Remove fallback after all leads are normalized
@@ -127,6 +136,14 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
+  // Map rep names to leads
+  const leadsWithRepNames = useMemo(() => {
+    return initialLeads.map(lead => ({
+      ...lead,
+      assigned_rep_name: getRepName(lead, reps) || lead.assigned_rep_name
+    }));
+  }, [initialLeads, reps]);
+
   // Subscribe to Supabase Realtime for leads table updates
   useEffect(() => {
     const supabase = createClient();
@@ -175,7 +192,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
 
   // Client-side filtering
   const filteredLeads = useMemo(() => {
-    let filtered = initialLeads;
+    let filtered = leadsWithRepNames;
 
     // Search filter
     if (searchQuery.trim()) {
@@ -245,7 +262,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     }
 
     return filtered;
-  }, [initialLeads, searchQuery, statusFilter, intentFilters, assignedRepFilter, sortBy]);
+  }, [leadsWithRepNames, searchQuery, statusFilter, intentFilters, assignedRepFilter, sortBy]);
 
   // Filter presets
   const applyPreset = (preset: string) => {
@@ -657,7 +674,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                       {formatDate(lead.submission_date || lead.created_at || "")}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      {lead.assigned_rep_name || lead.assigned_rep_id || <span className="text-muted-foreground">—</span>}
+                      {lead.assigned_rep_name || <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">
                       {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
@@ -737,11 +754,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                       } 
                     />
                     <div className="text-xs text-muted-foreground">
-                      {lead.assigned_rep_name || lead.assigned_rep_id ? (
-                        <span>{lead.assigned_rep_name || lead.assigned_rep_id}</span>
-                      ) : (
-                        <span>Unassigned</span>
-                      )}
+                      {lead.assigned_rep_name || <span>Unassigned</span>}
                     </div>
                   </div>
 
