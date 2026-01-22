@@ -24,6 +24,10 @@ const updateDesignNotesSchema = z.object({
   designNotes: z.string().max(50000, "Design notes too long"),
 });
 
+const createTrelloCardSchema = z.object({
+  leadId: z.string().uuid(),
+});
+
 export async function addNoteAction(formData: FormData): Promise<{ error?: string } | void> {
   const rawFormData = {
     leadId: formData.get("leadId") as string,
@@ -321,4 +325,99 @@ export async function updateDesignNotesAction(
   }
 
   revalidatePath(`/leads/${result.data.leadId}`);
+}
+
+export async function createTrelloCardAction(
+  formData: FormData
+): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    leadId: formData.get("leadId") as string,
+  };
+
+  const result = createTrelloCardSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createClient();
+
+  // Get current user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Check if user is CEO/Admin
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can create Trello cards" };
+  }
+
+  const modifierName = profile?.full_name || user.email || "Admin";
+
+  // Get lead details
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select("id, lead_id, customer_name, name, card_id")
+    .eq("id", result.data.leadId)
+    .single();
+
+  if (leadError || !lead) {
+    return { error: "Lead not found" };
+  }
+
+  if (lead.card_id) {
+    return { error: "Trello card already exists for this lead" };
+  }
+
+  // Import createTrelloCard dynamically (server-only)
+  const { createTrelloCard } = await import("@/lib/trello");
+
+  // Create Trello card
+  const cardName = `Lead: ${lead.customer_name || lead.name || lead.lead_id}`;
+  const cardDescription = `Lead ID: ${lead.lead_id}\n\nCreated from RecklessBear Admin`;
+
+  const cardResult = await createTrelloCard({
+    name: cardName,
+    description: cardDescription,
+  });
+
+  if ("error" in cardResult) {
+    return { error: cardResult.error };
+  }
+
+  // Update lead with card info
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update({
+      card_id: cardResult.id,
+      card_created: true,
+      updated_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+      last_modified_by: modifierName,
+    })
+    .eq("id", result.data.leadId);
+
+  if (updateError) {
+    return { error: updateError.message || "Failed to update lead with card info" };
+  }
+
+  // Create event
+  await supabase.from("lead_events").insert({
+    lead_db_id: result.data.leadId,
+    actor_user_id: user.id,
+    event_type: "trello_card_created",
+    payload: { cardId: cardResult.id, cardUrl: cardResult.url },
+  });
+
+  revalidatePath(`/leads/${lead.lead_id}`);
 }
