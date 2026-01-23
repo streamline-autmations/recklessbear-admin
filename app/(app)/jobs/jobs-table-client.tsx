@@ -74,7 +74,7 @@ function getRepName(lead: DisplayLead, reps: Rep[]): string | null {
   return rep?.name || rep?.email || null;
 }
 
-export function JobsTableClient({ initialLeads, reps, currentUserId }: JobsTableClientProps) {
+export function JobsTableClient({ initialLeads, reps }: JobsTableClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");

@@ -123,7 +123,7 @@ export async function changeStatusAction(
   const newStatus = result.data.status;
   
   // Phase 3: Sales -> Job Conversion Logic
-  let trelloUpdateData: any = {};
+  let trelloUpdateData: Record<string, unknown> = {};
   let jobCreated = false;
   
   if (newStatus === "Quote Approved" && !currentLead.card_id) {

@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import type { Material, StockMovement } from "@/types/stock";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -124,7 +123,7 @@ export default async function StockPage() {
                         <p className="text-xs text-muted-foreground">
                           {new Date(mov.created_at).toLocaleDateString()} {new Date(mov.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </p>
-                        {mov.notes && <p className="text-xs text-muted-foreground mt-1 italic">"{mov.notes}"</p>}
+                        {mov.notes && <p className="text-xs text-muted-foreground mt-1 italic">&quot;{mov.notes}&quot;</p>}
                       </div>
                       <div className="text-right">
                          <Badge variant={mov.type === 'restocked' ? 'outline' : mov.type === 'consumed' ? 'secondary' : 'default'} className={

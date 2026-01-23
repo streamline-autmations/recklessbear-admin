@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { getConversations } from "./actions";
 import InboxClient from "./inbox-client";
 import { Metadata } from "next";

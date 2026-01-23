@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, AlertTriangle, ArrowUp, ArrowDown, History } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { addMaterialAction, addStockMovementAction, updateMaterialAction } from "./actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -80,7 +80,7 @@ export function InventoryTableClient({ materials }: InventoryTableClientProps) {
     // Simplified: Restock always adds. Audit can be + or -.
     // Let's assume Restock UI is just for adding.
     
-    let delta = qty;
+    const delta = qty;
     if (movementType === "audit") {
         // If audit, user enters NEW total? Or difference?
         // Let's stick to simple "Add/Remove" logic for now or "Adjust by"

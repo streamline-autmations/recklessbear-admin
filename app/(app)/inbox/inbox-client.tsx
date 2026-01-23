@@ -6,17 +6,16 @@ import { getMessages, sendMessageAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Send, ArrowLeft, Phone, User } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Assuming this exists or I use div overflow
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Assuming
-import { Badge } from "@/components/ui/badge"; // Assuming
-import { toast } from "sonner"; // Assuming
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface InboxClientProps {
   initialConversations: WhatsAppConversation[];
 }
 
 export default function InboxClient({ initialConversations }: InboxClientProps) {
-  const [conversations, setConversations] = useState<WhatsAppConversation[]>(initialConversations);
+  const [conversations] = useState<WhatsAppConversation[]>(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);

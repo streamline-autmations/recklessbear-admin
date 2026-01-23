@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/server';
 import { JobsTableClient } from './jobs-table-client';
-import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';
 import type { Lead } from '@/types/leads';
 import { RefreshButton } from '../leads/refresh-button';
 
@@ -200,7 +199,7 @@ export default async function JobsPage() {
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-2">No active jobs found.</p>
             <p className="text-sm text-muted-foreground">
-              Jobs appear here when leads are marked as "Quote Approved".
+              Jobs appear here when leads are marked as &quot;Quote Approved&quot;.
             </p>
           </CardContent>
         </Card>
