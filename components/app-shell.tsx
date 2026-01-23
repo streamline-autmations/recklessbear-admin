@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Search } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Search, MessageSquare, BarChart3, Briefcase, Package } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,10 @@ import { Input } from "@/components/ui/input";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/leads", icon: UsersIcon },
+  { name: "Jobs", href: "/jobs", icon: Briefcase },
+  { name: "Stock", href: "/stock", icon: Package },
+  { name: "Inbox", href: "/inbox", icon: MessageSquare },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Users", href: "/users", icon: ShieldCheck },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -51,7 +55,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const renderNav = (mobile?: boolean) => {
     const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
     const visibleNav = navigation.filter((item) => {
-      if (item.href === "/users" || item.href === "/settings") {
+      if (item.href === "/users" || item.href === "/settings" || item.href === "/analytics") {
         return isCeoOrAdmin;
       }
       return true;

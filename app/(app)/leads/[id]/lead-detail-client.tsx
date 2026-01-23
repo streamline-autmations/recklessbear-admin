@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -20,10 +20,12 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, autoAssignLeadAction } from "./actions";
+import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { TrelloCreateButton } from "./trello-create-button";
 import type { Lead } from "@/types/leads";
+import { Separator } from "@/components/ui/separator";
+import { ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface DisplayLead extends Lead {
   id?: string;
@@ -182,31 +184,14 @@ export function LeadDetailClient({
     });
   }
 
-  const [isAutoAssignPending, startAutoAssignTransition] = useTransition();
-
-  function handleAutoAssign() {
-    startAutoAssignTransition(async () => {
-      const formData = new FormData();
-      formData.set("leadId", lead.id || leadId);
-
-      const result = await autoAssignLeadAction(formData);
-      if (result && "error" in result) {
-        toast.error(result.error);
-      } else if (result && "repId" in result) {
-        router.refresh();
-        toast.success("Lead auto-assigned successfully");
-      }
-    });
-  }
-
   return (
     <div className="space-y-6">
       {/* Header Actions: Status and Rep Assignment */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
-              <div className="space-y-2 flex-1">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4 w-full md:w-auto">
+              <div className="space-y-2 w-full sm:w-auto">
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={selectedStatus}
@@ -231,50 +216,40 @@ export function LeadDetailClient({
                   <p className="text-sm text-destructive">{statusError}</p>
                 )}
               </div>
-              {isCeoOrAdmin && (
-                <div className="space-y-2 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <Label htmlFor="rep">Assigned Rep</Label>
-                      <Select
-                        value={selectedRepId}
-                        onValueChange={handleAssignRep}
-                        disabled={isRepPending}
-                      >
-                        <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
-                          <SelectValue placeholder="Unassigned" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                            {reps.map((rep) => (
-                              <SelectItem key={rep.id} value={rep.id}>
-                                {rep.name || rep.email || rep.id}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {!lead.assigned_rep_id && (
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleAutoAssign}
-                          disabled={isAutoAssignPending || isRepPending}
-                          className="min-h-[44px] whitespace-nowrap"
-                        >
-                          {isAutoAssignPending ? "Assigning..." : "Auto-Assign"}
-                        </Button>
-                      </div>
+              
+              <div className="space-y-2 w-full sm:w-auto">
+                <Label htmlFor="rep">Assigned Rep</Label>
+                {isCeoOrAdmin ? (
+                  <>
+                    <Select
+                      value={selectedRepId}
+                      onValueChange={handleAssignRep}
+                      disabled={isRepPending}
+                    >
+                      <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                        {reps.map((rep) => (
+                          <SelectItem key={rep.id} value={rep.id}>
+                            {rep.name || rep.email || rep.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {repError && (
+                      <p className="text-sm text-destructive">{repError}</p>
                     )}
+                  </>
+                ) : (
+                  <div className="flex items-center h-[44px] px-3 border rounded-md bg-muted text-muted-foreground text-sm">
+                    {lead.assigned_rep_name || "Unassigned"}
                   </div>
-                  {repError && (
-                    <p className="text-sm text-destructive">{repError}</p>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
+            
             <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge
                 status={
@@ -289,24 +264,9 @@ export function LeadDetailClient({
                     | "lost"
                 }
               />
-              {lead.sales_status && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                  Sales: {lead.sales_status}
-                </span>
-              )}
-              {lead.payment_status && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                  Payment: {lead.payment_status}
-                </span>
-              )}
               {lead.production_stage && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                  Production: {lead.production_stage}
-                </span>
-              )}
-              {lead.card_created && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                  Card Created
+                <span className="inline-flex items-center rounded-md bg-secondary text-secondary-foreground px-2 py-1 text-xs font-medium border border-border">
+                  {lead.production_stage}
                 </span>
               )}
             </div>
@@ -327,11 +287,13 @@ export function LeadDetailClient({
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          {/* Contact Information */}
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-4">Contact Information</h3>
-              <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* Contact Information */}
+            <Card className="md:col-span-2 lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-base">Contact Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
                   <p className="text-sm font-medium mb-1">Name</p>
                   <p className="text-sm text-muted-foreground">{lead.customer_name || lead.name || "—"}</p>
@@ -361,50 +323,38 @@ export function LeadDetailClient({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-1">Company/Organization</p>
+                  <p className="text-sm font-medium mb-1">Company</p>
                   <p className="text-sm text-muted-foreground">{lead.organization || "—"}</p>
                 </div>
+                <Separator />
                 <div>
                   <p className="text-sm font-medium mb-1">Date Submitted</p>
                   <p className="text-sm text-muted-foreground">
                     {formatDateSafe(lead.submission_date || lead.created_at)}
                   </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Lead Information */}
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-4">Lead Information</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium mb-1">Status</p>
-                  <p className="text-sm text-muted-foreground">{lead.status || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium mb-1">Assigned Rep</p>
-                  <p className="text-sm text-muted-foreground">{lead.assigned_rep_name || "Unassigned"}</p>
-                </div>
+            {/* Sales Summary */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-base">Sales Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
                   <p className="text-sm font-medium mb-1">Sales Status</p>
-                  <p className="text-sm text-muted-foreground">{lead.sales_status || "—"}</p>
+                  <p className="text-sm text-muted-foreground">{lead.sales_status || lead.status || "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-1">Payment Status</p>
                   <p className="text-sm text-muted-foreground">{lead.payment_status || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-1">Production Stage</p>
-                  <p className="text-sm text-muted-foreground">{lead.production_stage || "—"}</p>
+                  <p className="text-sm font-medium mb-1">Assigned Rep</p>
+                  <p className="text-sm text-muted-foreground">{lead.assigned_rep_name || "Unassigned"}</p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium mb-1">Created</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDateSafe(lead.submission_date || lead.created_at)}
-                  </p>
-                </div>
+                <Separator />
                 <div>
                   <p className="text-sm font-medium mb-1">Last Modified</p>
                   <p className="text-sm text-muted-foreground">
@@ -412,42 +362,97 @@ export function LeadDetailClient({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-1">Last Modified By</p>
+                  <p className="text-sm font-medium mb-1">By</p>
                   <p className="text-sm text-muted-foreground">{lead.last_modified_by || "—"}</p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Trello Section */}
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-4">Trello</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium mb-1">Card Created</p>
-                  <p className="text-sm text-muted-foreground">{lead.card_created ? "Yes" : "No"}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium mb-1">Card ID</p>
-                  <p className="text-sm text-muted-foreground font-mono">{lead.card_id || "—"}</p>
-                </div>
-                {lead.card_id && (
-                  <div className="col-span-2">
-                    <Button variant="outline" size="sm" asChild className="min-h-[44px] gap-2">
-                      <a href={`https://trello.com/c/${lead.card_id}`} target="_blank" rel="noopener noreferrer">
-                        Open Trello Card
-                      </a>
-                    </Button>
+            {/* Production / Job Summary */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-base">Production Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lead.sales_status === "Quote Approved" || lead.card_id ? (
+                  <>
+                     <div>
+                      <p className="text-sm font-medium mb-1">Production Stage</p>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-2 w-2 rounded-full bg-green-500"></span>
+                        <p className="text-sm text-foreground">{lead.production_stage || "Ready for Production"}</p>
+                      </div>
+                    </div>
+                    {lead.card_id ? (
+                      <div>
+                         <p className="text-sm font-medium mb-1">Trello Card</p>
+                         <Button variant="outline" size="sm" asChild className="h-8 gap-2 w-full justify-start">
+                           <a href={`https://trello.com/c/${lead.card_id}`} target="_blank" rel="noopener noreferrer">
+                             <ExternalLink className="h-3 w-3" />
+                             Open Card
+                           </a>
+                         </Button>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-muted/50 rounded-lg border border-dashed">
+                        <p className="text-xs text-muted-foreground mb-2">Job approved but no Trello card.</p>
+                        <TrelloCreateButton leadId={leadId} leadName={lead.customer_name || lead.name || null} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[160px] text-center p-4 bg-muted/20 rounded-lg border border-dashed">
+                    <p className="text-sm font-medium text-muted-foreground">Not in Production</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Approve Quote to start job.
+                    </p>
                   </div>
                 )}
-                {!lead.card_id && (
-                  <div className="col-span-2">
-                    <TrelloCreateButton leadId={leadId} leadName={lead.customer_name || lead.name || null} />
-                  </div>
+                
+                {(lead.delivery_date || lead.date_completed) && (
+                  <>
+                    <Separator />
+                    {lead.delivery_date && (
+                      <div>
+                        <p className="text-sm font-medium mb-1">Delivery Due</p>
+                        <p className="text-sm text-muted-foreground">{formatDateSafe(lead.delivery_date)}</p>
+                      </div>
+                    )}
+                  </>
                 )}
-              </div>
-            </CardContent>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Convert to Job Section (Phase 3 Prep) */}
+          <Card className="mt-6 border-l-4 border-l-primary/20">
+             <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      Job Status
+                      {lead.sales_status === "Quote Approved" ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {lead.sales_status === "Quote Approved" 
+                        ? "This lead has been approved and is ready for production tracking."
+                        : "Update status to 'Quote Approved' to convert this lead into a production job."}
+                    </p>
+                  </div>
+                  {lead.sales_status !== "Quote Approved" && (
+                     <Button 
+                       onClick={() => handleStatusChange("Quote Approved")}
+                       disabled={isStatusPending}
+                     >
+                       Approve Quote & Create Job
+                     </Button>
+                  )}
+                </div>
+             </CardContent>
           </Card>
         </TabsContent>
 
@@ -641,104 +646,34 @@ export function LeadDetailClient({
           <Card>
             <CardContent className="pt-6">
               <h3 className="text-lg font-semibold mb-4">Timeline</h3>
-              <div className="space-y-3">
-                {/* Date-based timeline entries */}
-                {lead.submission_date && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Created</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.submission_date)}
-                      </span>
-                    </div>
+              <div className="space-y-6 relative pl-4 border-l-2 border-muted ml-2">
+                {/* Date-based timeline entries - Merged into a single sorted list with events if possible, but for now stack them */}
+                
+                <div className="relative">
+                  <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-primary/20 border-2 border-primary"></div>
+                  <p className="text-sm font-medium">Created</p>
+                  <p className="text-xs text-muted-foreground">{formatDateSafe(lead.submission_date)}</p>
+                </div>
+
+                {events.map((event) => (
+                  <div key={event.id} className="relative">
+                    <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-muted-foreground/20 border-2 border-muted-foreground"></div>
+                    <p className="text-sm font-medium">{event.event_type.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateSafe(event.created_at)}</p>
+                    {Object.keys(event.payload).length > 0 && (
+                       <div className="mt-1 text-xs bg-muted p-2 rounded">
+                         <pre className="whitespace-pre-wrap font-mono">{formatPayload(event.payload)}</pre>
+                       </div>
+                    )}
                   </div>
-                )}
-                {lead.updated_at && lead.updated_at !== lead.submission_date && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Updated</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {lead.last_modified && lead.last_modified !== lead.updated_at && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Last Modified</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.last_modified)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {lead.date_approved && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Date Approved</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.date_approved)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {lead.delivery_date && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Delivery Date</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.delivery_date)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {lead.date_delivered_collected && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Delivered/Collected</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.date_delivered_collected)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {lead.date_completed && (
-                  <div className="border-b pb-3 last:border-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Date Completed</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateSafe(lead.date_completed)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {/* Events timeline */}
-                {events.length > 0 && (
-                  <>
-                    {events.map((event) => (
-                      <div key={event.id} className="border-b pb-3 last:border-0">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">{event.event_type}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDateSafe(event.created_at)}
-                            </span>
-                          </div>
-                          {Object.keys(event.payload).length > 0 && (
-                            <pre className="text-xs text-muted-foreground font-mono break-words mt-1">
-                              {formatPayload(event.payload)}
-                            </pre>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {events.length === 0 && !lead.submission_date && !lead.updated_at && !lead.last_modified && (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground">No timeline entries.</p>
-                  </div>
+                ))}
+                
+                {lead.updated_at && (
+                   <div className="relative">
+                    <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-muted border-2 border-muted-foreground/50"></div>
+                    <p className="text-sm font-medium">Last Updated</p>
+                    <p className="text-xs text-muted-foreground">{formatDateSafe(lead.updated_at)}</p>
+                   </div>
                 )}
               </div>
             </CardContent>

@@ -53,15 +53,15 @@ async function getCurrentUserRole(): Promise<string | null> {
 }
 
 /**
- * Get users for assignment (from users table, not profiles)
+ * Get users for assignment (from profiles table)
  */
 async function getUsersForAssignment(): Promise<Rep[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("users")
-    .select("id, name, email")
-    .order("name", { ascending: true });
+    .from("profiles")
+    .select("user_id, full_name, email")
+    .order("full_name", { ascending: true });
 
   if (error) {
     console.error("Error fetching users for assignment:", error);
@@ -69,8 +69,8 @@ async function getUsersForAssignment(): Promise<Rep[]> {
   }
 
   return (data || []).map((user) => ({
-    id: user.id,
-    name: user.name,
+    id: user.user_id,
+    name: user.full_name,
     email: user.email || null,
   }));
 }
@@ -184,15 +184,15 @@ async function getLead(id: string): Promise<Lead | null> {
     return null;
   }
 
-  // Fetch assigned rep name from users table if assigned
+  // Fetch assigned rep name from profiles table if assigned
   let assignedRepName: string | null = null;
   if (data.assigned_rep_id) {
     const { data: user } = await supabase
-      .from("users")
-      .select("name, email")
-      .eq("id", data.assigned_rep_id)
+      .from("profiles")
+      .select("full_name, email")
+      .eq("user_id", data.assigned_rep_id)
       .single();
-    assignedRepName = user?.name || user?.email || null;
+    assignedRepName = user?.full_name || user?.email || null;
   }
 
   // Build intents array from flags ONLY (canonical 3 intents)
@@ -308,6 +308,10 @@ async function getNotes(leadId: string): Promise<Note[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
+    // Ignore invalid UUID error, just return empty array
+    if (error.code === "22P02") {
+      return [];
+    }
     console.error("Error fetching notes:", error);
     return [];
   }
@@ -325,7 +329,11 @@ async function getEvents(leadId: string): Promise<Event[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching events:", error);
+    // Ignore invalid UUID error, just return empty array
+    if (error.code === "22P02") {
+      return [];
+    }
+    console.error("Error fetching events:", JSON.stringify(error, null, 2));
     return [];
   }
 
@@ -342,11 +350,14 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   }
 
   // Use lead.id (UUID) for notes and events queries
-  const leadDbId = lead.id || id;
+  // If lead came from spreadsheet and has no UUID id, we can't fetch notes/events
+  // Check if lead.id is a valid UUID (simple regex check)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
+  const leadDbId = isUuid ? lead.id : null;
 
   const [notes, events, userRole, reps] = await Promise.all([
-    getNotes(leadDbId),
-    getEvents(leadDbId),
+    leadDbId ? getNotes(leadDbId) : Promise.resolve([]),
+    leadDbId ? getEvents(leadDbId) : Promise.resolve([]),
     getCurrentUserRole(),
     getUsersForAssignment(),
   ]);
@@ -387,8 +398,11 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
           phone={lead.phone}
           email={lead.email}
           leadId={lead.lead_id}
+          dbId={lead.id}
           name={lead.customer_name || lead.name}
           cardId={lead.card_id}
+          isCeoOrAdmin={isCeoOrAdmin}
+          assignedRepId={lead.assigned_rep_id}
         />
       </div>
 

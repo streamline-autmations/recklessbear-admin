@@ -108,10 +108,10 @@ export async function changeStatusAction(
   
   const modifierName = profile?.full_name || user.email || "Admin";
 
-  // Get current status before updating
+  // Get current lead details (status, card_id, etc.)
   const { data: currentLead } = await supabase
     .from("leads")
-    .select("status")
+    .select("status, card_id, lead_id, customer_name, name, production_stage")
     .eq("id", result.data.leadId)
     .single();
 
@@ -121,12 +121,47 @@ export async function changeStatusAction(
 
   const oldStatus = currentLead.status;
   const newStatus = result.data.status;
+  
+  // Phase 3: Sales -> Job Conversion Logic
+  let trelloUpdateData: any = {};
+  let jobCreated = false;
+  
+  if (newStatus === "Quote Approved" && !currentLead.card_id) {
+    // Import createTrelloCard dynamically
+    const { createTrelloCard } = await import("@/lib/trello");
+    
+    // Create Trello card
+    const cardName = `Lead: ${currentLead.customer_name || currentLead.name || currentLead.lead_id}`;
+    const cardDescription = `Lead ID: ${currentLead.lead_id}\n\nCreated from RecklessBear Admin`;
+    
+    const cardResult = await createTrelloCard({
+      name: cardName,
+      description: cardDescription,
+    });
+    
+    if ("error" in cardResult) {
+      console.error("Failed to create Trello card during status change:", cardResult.error);
+      // We continue with status update but warn user? 
+      // Ideally we might want to return error, but status change is primary.
+      // Let's return error to enforce "Quote Approved" = "Job Created"
+      return { error: `Failed to create Trello card: ${cardResult.error}` };
+    }
+    
+    trelloUpdateData = {
+      card_id: cardResult.id,
+      card_created: true,
+      production_stage: currentLead.production_stage || "Orders Awaiting Confirmation", // Set initial stage if null
+    };
+    jobCreated = true;
+  }
 
-  // Update lead status with audit fields
+  // Update lead status with audit fields and potential Trello data
   const { error: updateError } = await supabase
     .from("leads")
     .update({ 
       status: newStatus,
+      sales_status: newStatus, // Sync sales_status with status
+      ...trelloUpdateData,
       updated_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
       last_modified_by: modifierName,
@@ -144,6 +179,18 @@ export async function changeStatusAction(
     event_type: "status_changed",
     payload: { from: oldStatus, to: newStatus },
   });
+  
+  if (jobCreated) {
+    await supabase.from("lead_events").insert({
+      lead_db_id: result.data.leadId,
+      actor_user_id: user.id,
+      event_type: "job_created",
+      payload: { 
+        cardId: trelloUpdateData.card_id, 
+        initialStage: trelloUpdateData.production_stage 
+      },
+    });
+  }
 
   revalidatePath(`/leads/${result.data.leadId}`);
 }
@@ -227,14 +274,14 @@ export async function assignRepAction(
     return;
   }
 
-  // Get rep user for label (only if assigning) - from users table
+  // Get rep user for label (only if assigning) - from profiles table
   const { data: repUser } = await supabase
-    .from("users")
-    .select("name, email")
-    .eq("id", result.data.repId)
+    .from("profiles")
+    .select("full_name, email")
+    .eq("user_id", result.data.repId)
     .single();
 
-  const repLabel = repUser?.name || repUser?.email || result.data.repId;
+  const repLabel = repUser?.full_name || repUser?.email || result.data.repId;
 
   // Update lead - set assigned_rep_id and optionally update status
   const updateData: { 

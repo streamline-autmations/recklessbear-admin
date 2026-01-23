@@ -160,21 +160,11 @@ export async function createUserAction(
   }
 
   // Also upsert into users table if it exists (for rep assignment)
-  const { error: usersError } = await adminClient
-    .from("users")
-    .upsert({
-      id: authUser.user.id,
-      name: result.data.fullName,
-      email: result.data.email,
-    }, {
-      onConflict: "id",
-    });
-
-  // Log warning if users table update fails, but don't fail the whole operation
-  if (usersError) {
-    console.warn("Failed to update users table:", usersError);
-  }
-
+  // This table is deprecated in favor of profiles, but keeping for compatibility if needed
+  // Only if the table actually exists in this schema version
+  
+  // No longer syncing to 'users' table as we migrated to 'profiles'
+  
   revalidatePath("/users");
   return { userId: authUser.user.id };
 }
