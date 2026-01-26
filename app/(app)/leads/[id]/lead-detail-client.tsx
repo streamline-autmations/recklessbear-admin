@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -20,12 +22,12 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction } from "./actions";
+import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { TrelloCreateButton } from "./trello-create-button";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ExternalLink, AlertCircle, CheckCircle2, Pencil, Trash2, Plus } from "lucide-react";
 
 interface DisplayLead extends Lead {
   id?: string;
@@ -119,6 +121,420 @@ export function LeadDetailClient({
     }
   }
 
+  function normalizeStringArray(value: unknown): string[] {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map(String).map((s) => s.trim()).filter(Boolean);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.map(String).map((s) => s.trim()).filter(Boolean);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return trimmed
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return [];
+  }
+
+  function normalizeBoolean(value: unknown): boolean | null {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    if (typeof value === "string") {
+      const v = value.trim().toLowerCase();
+      if (!v) return null;
+      if (["true", "yes", "y", "checked", "1"].includes(v)) return true;
+      if (["false", "no", "n", "0"].includes(v)) return false;
+    }
+    return null;
+  }
+
+  function getQuoteValueFallback<T>(primary: T | null | undefined, ...fallbacks: Array<T | null | undefined>): T | null {
+    if (primary !== null && primary !== undefined && String(primary).trim() !== "") return primary;
+    for (const v of fallbacks) {
+      if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+    }
+    return null;
+  }
+
+  const selectedItemGroups = (() => {
+    const explicit = normalizeStringArray(lead.selected_apparel_items);
+    if (explicit.length > 0) {
+      return [{ label: "Selected Items", items: explicit }];
+    }
+
+    const sources: Array<{ key: keyof DisplayLead; label: string }> = [
+      { key: "corporate_items", label: "Corporate" },
+      { key: "schoolwear_items", label: "Schoolwear" },
+      { key: "gym_items", label: "Gym" },
+      { key: "sports_kits_selected", label: "Sports Kits" },
+      { key: "rugby_items", label: "Rugby" },
+      { key: "soccer_items", label: "Soccer" },
+      { key: "cricket_items", label: "Cricket" },
+      { key: "netball_items", label: "Netball" },
+      { key: "hockey_items", label: "Hockey" },
+      { key: "athletics_items", label: "Athletics" },
+      { key: "golf_items", label: "Golf" },
+      { key: "fishing_items", label: "Fishing" },
+    ];
+
+    const groups = sources
+      .map((s) => ({ label: s.label, items: normalizeStringArray(lead[s.key]) }))
+      .filter((g) => g.items.length > 0);
+
+    if (groups.length > 0) return groups;
+
+    const legacyQuote = lead.quote_data || {};
+    const legacyItems = normalizeStringArray((legacyQuote as Record<string, unknown>)["selected_apparel_items"]);
+    if (legacyItems.length > 0) return [{ label: "Selected Items", items: legacyItems }];
+
+    return [];
+  })();
+
+  const apparelInterest = getQuoteValueFallback(
+    lead.apparel_interest,
+    (lead.quote_data as Record<string, unknown> | null)?.["apparel_interest"] as string | null,
+    lead.product_type,
+    lead.category
+  );
+
+  const warmupsValue = normalizeBoolean(
+    getQuoteValueFallback(lead.warmup_kit, (lead.quote_data as Record<string, unknown> | null)?.["warmup_kit"])
+  );
+
+  const quantityValue = getQuoteValueFallback(
+    lead.quantity_value,
+    lead.quantity_rough,
+    (lead.quote_data as Record<string, unknown> | null)?.["quantity_value"] as string | null,
+    (lead.quote_data as Record<string, unknown> | null)?.["quantity_rough"] as string | null,
+    lead.quantity_range
+  );
+
+  const hasDeadlineValue = normalizeBoolean(
+    getQuoteValueFallback(lead.has_deadline, (lead.quote_data as Record<string, unknown> | null)?.["has_deadline"])
+  );
+
+  const preferredDeadlineDateValue = getQuoteValueFallback(
+    lead.preferred_deadline_date,
+    (lead.quote_data as Record<string, unknown> | null)?.["preferred_deadline_date"] as string | null,
+    lead.delivery_date
+  );
+
+  const attachmentUrls = (() => {
+    const direct = normalizeStringArray(lead.attachments);
+    if (direct.length > 0) return direct;
+    const legacy = normalizeStringArray((lead.quote_data as Record<string, unknown> | null)?.["attachments"]);
+    return legacy;
+  })();
+
+  const isDev = process.env.NODE_ENV !== "production";
+
+  const isDbLead = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
+  const canEditQuote = isCeoOrAdmin && isDbLead;
+
+  type QuoteEditMode =
+    | "apparel_interest"
+    | "selected_items"
+    | "warmup_kit"
+    | "quantity"
+    | "deadline"
+    | "message"
+    | "design_notes"
+    | "attachments";
+
+  const [quoteEditOpen, setQuoteEditOpen] = useState(false);
+  const [quoteEditMode, setQuoteEditMode] = useState<QuoteEditMode | null>(null);
+  const [editTextValue, setEditTextValue] = useState("");
+  const [editListValue, setEditListValue] = useState("");
+  const [editBoolValue, setEditBoolValue] = useState<"true" | "false" | "unset">("unset");
+  const [editQuantityValue, setEditQuantityValue] = useState("");
+  const [editQuantityRough, setEditQuantityRough] = useState("");
+  const [editHasDeadline, setEditHasDeadline] = useState<"true" | "false" | "unset">("unset");
+  const [editPreferredDeadline, setEditPreferredDeadline] = useState("");
+  const [isQuoteEditPending, startQuoteEditTransition] = useTransition();
+
+  function openQuoteEdit(mode: QuoteEditMode) {
+    setQuoteEditMode(mode);
+    if (mode === "apparel_interest") {
+      setEditTextValue(String(lead.apparel_interest || ""));
+    } else if (mode === "selected_items") {
+      const current = normalizeStringArray(lead.selected_apparel_items);
+      setEditListValue(current.join("\n"));
+    } else if (mode === "warmup_kit") {
+      const b = normalizeBoolean(lead.warmup_kit);
+      setEditBoolValue(b === null ? "unset" : b ? "true" : "false");
+    } else if (mode === "quantity") {
+      setEditQuantityValue(lead.quantity_value === null || lead.quantity_value === undefined ? "" : String(lead.quantity_value));
+      setEditQuantityRough(String(lead.quantity_rough || ""));
+    } else if (mode === "deadline") {
+      const b = normalizeBoolean(lead.has_deadline);
+      setEditHasDeadline(b === null ? "unset" : b ? "true" : "false");
+      setEditPreferredDeadline(String(lead.preferred_deadline_date || ""));
+    } else if (mode === "message") {
+      setEditTextValue(String(lead.message || ""));
+    } else if (mode === "design_notes") {
+      setEditTextValue(String(lead.design_notes || ""));
+    } else if (mode === "attachments") {
+      const urls = normalizeStringArray(lead.attachments);
+      setEditListValue(urls.join("\n"));
+    }
+    setQuoteEditOpen(true);
+  }
+
+  function clearQuoteField(mode: QuoteEditMode) {
+    if (!canEditQuote) return;
+    const idToUse = lead.id || leadId;
+    const formData = new FormData();
+    formData.set("leadId", idToUse);
+
+    const updates: Record<string, unknown> = {};
+    if (mode === "apparel_interest") updates.apparel_interest = null;
+    if (mode === "selected_items") updates.selected_apparel_items = null;
+    if (mode === "warmup_kit") updates.warmup_kit = null;
+    if (mode === "quantity") {
+      updates.quantity_value = null;
+      updates.quantity_rough = null;
+    }
+    if (mode === "deadline") {
+      updates.has_deadline = null;
+      updates.preferred_deadline_date = null;
+    }
+    if (mode === "message") updates.message = null;
+    if (mode === "design_notes") updates.design_notes = null;
+    if (mode === "attachments") updates.attachments = null;
+
+    formData.set("updates", JSON.stringify(updates));
+
+    startQuoteEditTransition(async () => {
+      const result = await updateLeadFieldsAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Field cleared");
+      router.refresh();
+    });
+  }
+
+  function saveQuoteEdits() {
+    if (!canEditQuote || !quoteEditMode) return;
+    const idToUse = lead.id || leadId;
+    const formData = new FormData();
+    formData.set("leadId", idToUse);
+
+    const updates: Record<string, unknown> = {};
+
+    if (quoteEditMode === "apparel_interest") {
+      updates.apparel_interest = editTextValue.trim() ? editTextValue.trim() : null;
+    } else if (quoteEditMode === "selected_items") {
+      const items = editListValue
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      updates.selected_apparel_items = items.length > 0 ? items : null;
+    } else if (quoteEditMode === "warmup_kit") {
+      updates.warmup_kit = editBoolValue === "unset" ? null : editBoolValue === "true";
+    } else if (quoteEditMode === "quantity") {
+      updates.quantity_value = editQuantityValue.trim() ? editQuantityValue.trim() : null;
+      updates.quantity_rough = editQuantityRough.trim() ? editQuantityRough.trim() : null;
+    } else if (quoteEditMode === "deadline") {
+      updates.has_deadline = editHasDeadline === "unset" ? null : editHasDeadline === "true";
+      updates.preferred_deadline_date = editPreferredDeadline.trim() ? editPreferredDeadline.trim() : null;
+    } else if (quoteEditMode === "message") {
+      updates.message = editTextValue.trim() ? editTextValue.trim() : null;
+    } else if (quoteEditMode === "design_notes") {
+      updates.design_notes = editTextValue.trim() ? editTextValue.trim() : null;
+    } else if (quoteEditMode === "attachments") {
+      const urls = editListValue
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      updates.attachments = urls.length > 0 ? urls : null;
+    }
+
+    formData.set("updates", JSON.stringify(updates));
+
+    startQuoteEditTransition(async () => {
+      const result = await updateLeadFieldsAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Quote updated");
+      setQuoteEditOpen(false);
+      router.refresh();
+    });
+  }
+
+  function quoteEditTitle(mode: QuoteEditMode | null) {
+    if (!mode) return "Edit";
+    if (mode === "apparel_interest") return "Edit Apparel Interest";
+    if (mode === "selected_items") return "Edit Selected Items";
+    if (mode === "warmup_kit") return "Edit Warmups";
+    if (mode === "quantity") return "Edit Quantity";
+    if (mode === "deadline") return "Edit Deadline";
+    if (mode === "message") return "Edit Message";
+    if (mode === "design_notes") return "Edit Design Notes";
+    if (mode === "attachments") return "Edit Attachments";
+    return "Edit";
+  }
+
+  function QuoteField({
+    label,
+    value,
+    empty,
+    onEdit,
+    onClear,
+  }: {
+    label: string;
+    value: ReactNode;
+    empty: boolean;
+    onEdit: () => void;
+    onClear: () => void;
+  }) {
+    return (
+      <div className="group relative pr-12">
+        <p className="text-sm font-medium mb-1">{label}</p>
+        <div className="text-sm text-muted-foreground">{value}</div>
+        {canEditQuote && (
+          <div className="absolute right-0 top-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={(e) => {
+                e.preventDefault();
+                onEdit();
+              }}
+              aria-label={empty ? `Add ${label}` : `Edit ${label}`}
+              title={empty ? "Add" : "Edit"}
+              disabled={isQuoteEditPending}
+            >
+              {empty ? <Plus className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            </Button>
+            {!empty && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onClear();
+                }}
+                aria-label={`Clear ${label}`}
+                title="Clear"
+                disabled={isQuoteEditPending}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function formatSelectedItemsValue() {
+    if (selectedItemGroups.length === 0) return "Not provided";
+    return (
+      <div className="space-y-3">
+        {selectedItemGroups.map((group) => (
+          <div key={group.label} className="space-y-2">
+            {selectedItemGroups.length > 1 && (
+              <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {group.items.map((item) => (
+                <span
+                  key={`${group.label}-${item}`}
+                  className="inline-flex items-center rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs font-medium"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function formatAttachmentsValue() {
+    if (attachmentUrls.length === 0) return "Not provided";
+    return (
+      <div className="space-y-2">
+        {attachmentUrls.map((url) => (
+          <a
+            key={url}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline block break-all"
+          >
+            {url}
+          </a>
+        ))}
+      </div>
+    );
+  }
+
+  function formatDeadlineValue() {
+    if (hasDeadlineValue === null) return "Not provided";
+    if (!hasDeadlineValue) return "No";
+    if (preferredDeadlineDateValue) return `Yes • ${formatDateSafe(preferredDeadlineDateValue)}`;
+    return "Yes";
+  }
+
+  function formatWarmupsValue() {
+    if (warmupsValue === null) return "Not provided";
+    return warmupsValue ? "Yes" : "No";
+  }
+
+  function formatQuantityValue() {
+    if (quantityValue === null) return "Not provided";
+    return String(quantityValue);
+  }
+
+  function formatMessageValue() {
+    return lead.message ? <span className="whitespace-pre-wrap">{lead.message}</span> : "Not provided";
+  }
+
+  function formatDesignNotesValue() {
+    return lead.design_notes ? <span className="whitespace-pre-wrap">{lead.design_notes}</span> : "Not provided";
+  }
+
+  function formatApparelInterestValue() {
+    return apparelInterest || "Not provided";
+  }
+
+  function isEmptyValue(val: unknown) {
+    if (val === null || val === undefined) return true;
+    if (typeof val === "string") return val.trim().length === 0;
+    if (Array.isArray(val)) return val.length === 0;
+    return false;
+  }
+
+  function quoteFieldEmpty(mode: QuoteEditMode) {
+    if (mode === "apparel_interest") return isEmptyValue(lead.apparel_interest);
+    if (mode === "selected_items") return normalizeStringArray(lead.selected_apparel_items).length === 0;
+    if (mode === "warmup_kit") return normalizeBoolean(lead.warmup_kit) === null;
+    if (mode === "quantity") return isEmptyValue(lead.quantity_value) && isEmptyValue(lead.quantity_rough);
+    if (mode === "deadline") return normalizeBoolean(lead.has_deadline) === null && isEmptyValue(lead.preferred_deadline_date);
+    if (mode === "message") return isEmptyValue(lead.message);
+    if (mode === "design_notes") return isEmptyValue(lead.design_notes);
+    if (mode === "attachments") return normalizeStringArray(lead.attachments).length === 0;
+    return true;
+  }
 
   function formatPayload(payload: Record<string, unknown>): string {
     try {
@@ -458,103 +874,220 @@ export function LeadDetailClient({
 
         {/* Quote / Products Tab */}
         <TabsContent value="quote" className="space-y-4">
-          {(lead.has_requested_quote || lead.quote_data || lead.category || lead.product_type) ? (
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">Quote / Products</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {lead.category && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Category</p>
-                      <p className="text-sm text-muted-foreground">{lead.category}</p>
-                    </div>
-                  )}
-                  {lead.product_type && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Product Type</p>
-                      <p className="text-sm text-muted-foreground">{lead.product_type}</p>
-                    </div>
-                  )}
-                  {lead.accessories_selected && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Accessories Selected</p>
-                      <p className="text-sm text-muted-foreground">{lead.accessories_selected}</p>
-                    </div>
-                  )}
-                  {lead.include_warmups && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Include Warmups</p>
-                      <p className="text-sm text-muted-foreground">{lead.include_warmups}</p>
-                    </div>
-                  )}
-                  {lead.quantity_range && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Quantity Range</p>
-                      <p className="text-sm text-muted-foreground">{lead.quantity_range}</p>
-                    </div>
-                  )}
-                  {lead.has_deadline && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Has Deadline</p>
-                      <p className="text-sm text-muted-foreground">{lead.has_deadline}</p>
-                    </div>
-                  )}
-                  {lead.message && (
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium mb-1">Message</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.message}</p>
-                    </div>
-                  )}
-                  {lead.design_notes && (
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium mb-1">Design Notes</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.design_notes}</p>
-                    </div>
-                  )}
-                  {lead.trello_product_list && (
-                    <div>
-                      <p className="text-sm font-medium mb-1">Trello Product List</p>
-                      <p className="text-sm text-muted-foreground">{lead.trello_product_list}</p>
-                    </div>
-                  )}
-                  {lead.attachments && (
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium mb-1">Attachments</p>
-                      {Array.isArray(lead.attachments) ? (
-                        <div className="space-y-2">
-                          {lead.attachments.map((url, idx) => (
-                            <a key={idx} href={String(url)} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline block">
-                              {String(url)}
-                            </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <a href={String(lead.attachments)} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
-                          {String(lead.attachments)}
-                        </a>
-                      )}
-                    </div>
-                  )}
-                  {lead.quote_data && Object.keys(lead.quote_data).length > 0 && (
-                    <div className="md:col-span-2">
-                      <details className="mt-4">
-                        <summary className="text-sm font-medium cursor-pointer">View Raw Quote Data</summary>
-                        <pre className="text-xs text-muted-foreground font-mono mt-2 p-3 bg-muted rounded overflow-auto">
-                          {JSON.stringify(lead.quote_data, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  )}
+          <Dialog open={quoteEditOpen} onOpenChange={setQuoteEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{quoteEditTitle(quoteEditMode)}</DialogTitle>
+              </DialogHeader>
+
+              {quoteEditMode === "apparel_interest" && (
+                <div className="space-y-2">
+                  <Label>Apparel Interest</Label>
+                  <Input value={editTextValue} onChange={(e) => setEditTextValue(e.target.value)} />
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">No quote request data available.</p>
-              </CardContent>
-            </Card>
-          )}
+              )}
+
+              {quoteEditMode === "selected_items" && (
+                <div className="space-y-2">
+                  <Label>Selected Items (one per line)</Label>
+                  <Textarea
+                    value={editListValue}
+                    onChange={(e) => setEditListValue(e.target.value)}
+                    className="min-h-[160px]"
+                    placeholder="e.g.\nPolo Shirts\nHoodies\nCaps"
+                  />
+                </div>
+              )}
+
+              {quoteEditMode === "warmup_kit" && (
+                <div className="space-y-2">
+                  <Label>Warmups</Label>
+                  <Select value={editBoolValue} onValueChange={(v: "true" | "false" | "unset") => setEditBoolValue(v)}>
+                    <SelectTrigger className="min-h-[44px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unset">Not provided</SelectItem>
+                      <SelectItem value="true">Yes</SelectItem>
+                      <SelectItem value="false">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {quoteEditMode === "quantity" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Quantity Value</Label>
+                    <Input value={editQuantityValue} onChange={(e) => setEditQuantityValue(e.target.value)} placeholder="e.g. 50" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Quantity Rough</Label>
+                    <Input value={editQuantityRough} onChange={(e) => setEditQuantityRough(e.target.value)} placeholder="e.g. 30-50" />
+                  </div>
+                </div>
+              )}
+
+              {quoteEditMode === "deadline" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Has Deadline</Label>
+                    <Select
+                      value={editHasDeadline}
+                      onValueChange={(v: "true" | "false" | "unset") => setEditHasDeadline(v)}
+                    >
+                      <SelectTrigger className="min-h-[44px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unset">Not provided</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Preferred Deadline Date</Label>
+                    <Input
+                      value={editPreferredDeadline}
+                      onChange={(e) => setEditPreferredDeadline(e.target.value)}
+                      placeholder="YYYY-MM-DD or any date string"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {quoteEditMode === "message" && (
+                <div className="space-y-2">
+                  <Label>Message</Label>
+                  <Textarea value={editTextValue} onChange={(e) => setEditTextValue(e.target.value)} className="min-h-[160px]" />
+                </div>
+              )}
+
+              {quoteEditMode === "design_notes" && (
+                <div className="space-y-2">
+                  <Label>Design Notes</Label>
+                  <Textarea value={editTextValue} onChange={(e) => setEditTextValue(e.target.value)} className="min-h-[160px]" />
+                </div>
+              )}
+
+              {quoteEditMode === "attachments" && (
+                <div className="space-y-2">
+                  <Label>Attachments (one URL per line)</Label>
+                  <Textarea
+                    value={editListValue}
+                    onChange={(e) => setEditListValue(e.target.value)}
+                    className="min-h-[160px]"
+                    placeholder="https://...\nhttps://..."
+                  />
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setQuoteEditOpen(false)} disabled={isQuoteEditPending}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={saveQuoteEdits} disabled={isQuoteEditPending || !canEditQuote}>
+                  {isQuoteEditPending ? "Saving..." : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="text-lg font-semibold mb-4">Quote / Products</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <QuoteField
+                  label="Apparel Interest"
+                  value={formatApparelInterestValue()}
+                  empty={quoteFieldEmpty("apparel_interest")}
+                  onEdit={() => openQuoteEdit("apparel_interest")}
+                  onClear={() => clearQuoteField("apparel_interest")}
+                />
+
+                <div className="md:col-span-2">
+                  <QuoteField
+                    label="Selected Items"
+                    value={formatSelectedItemsValue()}
+                    empty={quoteFieldEmpty("selected_items")}
+                    onEdit={() => openQuoteEdit("selected_items")}
+                    onClear={() => clearQuoteField("selected_items")}
+                  />
+                </div>
+
+                <QuoteField
+                  label="Warmups"
+                  value={formatWarmupsValue()}
+                  empty={quoteFieldEmpty("warmup_kit")}
+                  onEdit={() => openQuoteEdit("warmup_kit")}
+                  onClear={() => clearQuoteField("warmup_kit")}
+                />
+
+                <QuoteField
+                  label="Quantity"
+                  value={formatQuantityValue()}
+                  empty={quoteFieldEmpty("quantity")}
+                  onEdit={() => openQuoteEdit("quantity")}
+                  onClear={() => clearQuoteField("quantity")}
+                />
+
+                <div className="md:col-span-2">
+                  <QuoteField
+                    label="Deadline"
+                    value={formatDeadlineValue()}
+                    empty={quoteFieldEmpty("deadline")}
+                    onEdit={() => openQuoteEdit("deadline")}
+                    onClear={() => clearQuoteField("deadline")}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <QuoteField
+                    label="Message"
+                    value={formatMessageValue()}
+                    empty={quoteFieldEmpty("message")}
+                    onEdit={() => openQuoteEdit("message")}
+                    onClear={() => clearQuoteField("message")}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <QuoteField
+                    label="Design Notes"
+                    value={formatDesignNotesValue()}
+                    empty={quoteFieldEmpty("design_notes")}
+                    onEdit={() => openQuoteEdit("design_notes")}
+                    onClear={() => clearQuoteField("design_notes")}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <QuoteField
+                    label="Attachments"
+                    value={formatAttachmentsValue()}
+                    empty={quoteFieldEmpty("attachments")}
+                    onEdit={() => openQuoteEdit("attachments")}
+                    onClear={() => clearQuoteField("attachments")}
+                  />
+                </div>
+
+                {isDev && (
+                  <div className="md:col-span-2">
+                    <details className="mt-2">
+                      <summary className="text-sm font-medium cursor-pointer">Debug</summary>
+                      <div className="mt-2 space-y-2">
+                        <p className="text-xs text-muted-foreground">Raw keys present on lead object:</p>
+                        <pre className="text-xs text-muted-foreground font-mono p-3 bg-muted rounded overflow-auto">
+                          {Object.keys(lead).sort().join("\n")}
+                        </pre>
+                      </div>
+                    </details>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Booking Tab */}

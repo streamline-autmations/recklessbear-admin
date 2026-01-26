@@ -24,6 +24,39 @@ const updateDesignNotesSchema = z.object({
   designNotes: z.string().max(50000, "Design notes too long"),
 });
 
+const updateLeadFieldsSchema = z.object({
+  leadId: z.string().uuid(),
+  updates: z.string().min(2),
+});
+
+const leadFieldUpdatesSchema = z
+  .object({
+    apparel_interest: z.string().nullable().optional(),
+    selected_apparel_items: z.array(z.string()).nullable().optional(),
+    corporate_items: z.array(z.string()).nullable().optional(),
+    schoolwear_items: z.array(z.string()).nullable().optional(),
+    gym_items: z.array(z.string()).nullable().optional(),
+    sports_kits_selected: z.array(z.string()).nullable().optional(),
+    rugby_items: z.array(z.string()).nullable().optional(),
+    soccer_items: z.array(z.string()).nullable().optional(),
+    cricket_items: z.array(z.string()).nullable().optional(),
+    netball_items: z.array(z.string()).nullable().optional(),
+    hockey_items: z.array(z.string()).nullable().optional(),
+    athletics_items: z.array(z.string()).nullable().optional(),
+    golf_items: z.array(z.string()).nullable().optional(),
+    fishing_items: z.array(z.string()).nullable().optional(),
+    warmup_kit: z.boolean().nullable().optional(),
+    quantity_known: z.boolean().nullable().optional(),
+    quantity_value: z.union([z.string(), z.number()]).nullable().optional(),
+    quantity_rough: z.string().nullable().optional(),
+    has_deadline: z.boolean().nullable().optional(),
+    preferred_deadline_date: z.string().nullable().optional(),
+    message: z.string().nullable().optional(),
+    design_notes: z.string().nullable().optional(),
+    attachments: z.array(z.string()).nullable().optional(),
+  })
+  .strict();
+
 const createTrelloCardSchema = z.object({
   leadId: z.string().uuid(),
 });
@@ -370,6 +403,81 @@ export async function updateDesignNotesAction(
   if (updateError) {
     return { error: updateError.message || "Failed to update design notes" };
   }
+
+  revalidatePath(`/leads/${result.data.leadId}`);
+}
+
+export async function updateLeadFieldsAction(
+  formData: FormData
+): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    leadId: formData.get("leadId") as string,
+    updates: formData.get("updates") as string,
+  };
+
+  const result = updateLeadFieldsSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  let parsedUpdates: unknown;
+  try {
+    parsedUpdates = JSON.parse(result.data.updates);
+  } catch {
+    return { error: "Invalid updates payload" };
+  }
+
+  const updatesParsed = leadFieldUpdatesSchema.safeParse(parsedUpdates);
+  if (!updatesParsed.success) {
+    return { error: "Invalid field updates" };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can edit lead fields" };
+  }
+
+  const modifierName = profile?.full_name || user.email || "Admin";
+
+  const updateData: Record<string, unknown> = {
+    ...updatesParsed.data,
+    updated_at: new Date().toISOString(),
+    last_modified: new Date().toISOString(),
+    last_modified_by: modifierName,
+  };
+
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update(updateData)
+    .eq("id", result.data.leadId);
+
+  if (updateError) {
+    return { error: updateError.message || "Failed to update lead" };
+  }
+
+  const keys = Object.keys(updatesParsed.data);
+  await supabase.from("lead_events").insert({
+    lead_db_id: result.data.leadId,
+    actor_user_id: user.id,
+    event_type: "lead_fields_updated",
+    payload: { keys },
+  });
 
   revalidatePath(`/leads/${result.data.leadId}`);
 }

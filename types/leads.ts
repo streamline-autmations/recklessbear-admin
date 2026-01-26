@@ -58,6 +58,27 @@ export interface Lead {
   design_notes?: string | null;
   attachments?: string | string[] | null;
   trello_product_list?: string | null;
+
+  // Quote schema (Supabase leads table)
+  apparel_interest?: string | null;
+  selected_apparel_items?: string[] | null;
+  corporate_items?: string[] | null;
+  schoolwear_items?: string[] | null;
+  gym_items?: string[] | null;
+  sports_kits_selected?: string[] | null;
+  rugby_items?: string[] | null;
+  soccer_items?: string[] | null;
+  cricket_items?: string[] | null;
+  netball_items?: string[] | null;
+  hockey_items?: string[] | null;
+  athletics_items?: string[] | null;
+  golf_items?: string[] | null;
+  fishing_items?: string[] | null;
+  warmup_kit?: boolean | string | null;
+  quantity_known?: boolean | string | null;
+  quantity_value?: string | number | null;
+  quantity_rough?: string | null;
+  preferred_deadline_date?: string | null;
   
   // Booking fields
   booking_time?: string | null;

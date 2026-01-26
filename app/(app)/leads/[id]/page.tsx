@@ -154,6 +154,25 @@ async function getLead(id: string): Promise<Lead | null> {
     question_data,
     quote_data,
     booking_data,
+    apparel_interest,
+    selected_apparel_items,
+    corporate_items,
+    schoolwear_items,
+    gym_items,
+    sports_kits_selected,
+    rugby_items,
+    soccer_items,
+    cricket_items,
+    netball_items,
+    hockey_items,
+    athletics_items,
+    golf_items,
+    fishing_items,
+    warmup_kit,
+    quantity_known,
+    quantity_value,
+    quantity_rough,
+    preferred_deadline_date,
     card_id,
     card_created
   `;
@@ -245,6 +264,8 @@ async function getLead(id: string): Promise<Lead | null> {
     ["Quote", "Booking", "Question"].includes(intent)
   );
 
+  const row = data as unknown as Record<string, unknown>;
+
   return {
     id: data.id,
     lead_id: data.lead_id,
@@ -292,6 +313,25 @@ async function getLead(id: string): Promise<Lead | null> {
     booking_approved: data.booking_approved,
     pre_call_notes: data.pre_call_notes,
     question: data.question,
+    apparel_interest: (row.apparel_interest as string | null) ?? null,
+    selected_apparel_items: (row.selected_apparel_items as string[] | null) ?? null,
+    corporate_items: (row.corporate_items as string[] | null) ?? null,
+    schoolwear_items: (row.schoolwear_items as string[] | null) ?? null,
+    gym_items: (row.gym_items as string[] | null) ?? null,
+    sports_kits_selected: (row.sports_kits_selected as string[] | null) ?? null,
+    rugby_items: (row.rugby_items as string[] | null) ?? null,
+    soccer_items: (row.soccer_items as string[] | null) ?? null,
+    cricket_items: (row.cricket_items as string[] | null) ?? null,
+    netball_items: (row.netball_items as string[] | null) ?? null,
+    hockey_items: (row.hockey_items as string[] | null) ?? null,
+    athletics_items: (row.athletics_items as string[] | null) ?? null,
+    golf_items: (row.golf_items as string[] | null) ?? null,
+    fishing_items: (row.fishing_items as string[] | null) ?? null,
+    warmup_kit: (row.warmup_kit as boolean | string | null) ?? null,
+    quantity_known: (row.quantity_known as boolean | string | null) ?? null,
+    quantity_value: (row.quantity_value as string | number | null) ?? null,
+    quantity_rough: (row.quantity_rough as string | null) ?? null,
+    preferred_deadline_date: (row.preferred_deadline_date as string | null) ?? null,
     card_id: data.card_id,
     card_created: data.card_created,
   } as Lead;
