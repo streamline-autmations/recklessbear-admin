@@ -210,7 +210,7 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
 
     return {
       id: lead.id,
-      lead_id: lead.lead_id,
+      lead_id: lead.lead_id || lead.id,
       customer_name: lead.customer_name,
       name: lead.name,
       email: lead.email,

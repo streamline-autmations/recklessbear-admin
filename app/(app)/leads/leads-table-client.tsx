@@ -644,13 +644,13 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
                       if (!target.closest('a') && !target.closest('button')) {
-                        window.location.href = `/leads/${lead.lead_id}`;
+                        router.push(`/leads/${lead.lead_id || lead.id}`);
                       }
                     }}
                   >
                     <TableCell>
                       <Link
-                        href={`/leads/${lead.lead_id}`}
+                        href={`/leads/${lead.lead_id || lead.id}`}
                         className="font-medium text-primary hover:underline min-h-[44px] flex items-center"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -688,7 +688,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                         className="min-h-[44px]"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Link href={`/leads/${lead.lead_id}`} onClick={(e) => e.stopPropagation()}>View</Link>
+                        <Link href={`/leads/${lead.lead_id || lead.id}`} onClick={(e) => e.stopPropagation()}>View</Link>
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -714,7 +714,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
             <Card 
               key={lead.id || lead.lead_id}
               className="cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => window.location.href = `/leads/${lead.lead_id}`}
+              onClick={() => router.push(`/leads/${lead.lead_id || lead.id}`)}
             >
               <CardContent className="p-4">
                 <div className="space-y-3">
@@ -733,7 +733,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
                       size="sm"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Link href={`/leads/${lead.lead_id}`} onClick={(e) => e.stopPropagation()}>
+                      <Link href={`/leads/${lead.lead_id || lead.id}`} onClick={(e) => e.stopPropagation()}>
                         <ChevronRight className="h-4 w-4" />
                       </Link>
                     </Button>
