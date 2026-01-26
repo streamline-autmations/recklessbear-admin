@@ -7,6 +7,7 @@ import { RepPerformance } from "./components/rep-performance";
 import { ProductionPipeline } from "./components/production-pipeline";
 import { StockAlerts } from "./components/stock-alerts";
 import { Metadata } from "next";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
   title: "Analytics | RecklessBear Admin",
@@ -45,10 +46,8 @@ export default async function AnalyticsPage() {
   ]);
 
   return (
-    <div className="space-y-6 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Analytics</h2>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Analytics" subtitle="Funnels, performance, and operational signals." />
       
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>

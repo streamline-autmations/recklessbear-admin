@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import type { Material, StockMovement } from "@/types/stock";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -51,12 +52,7 @@ export default async function StockPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Stock Inventory</h1>
-          <p className="text-muted-foreground">Manage raw materials and track stock levels.</p>
-        </div>
-      </div>
+      <PageHeader title="Stock" subtitle="Manage raw materials and track stock levels." />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

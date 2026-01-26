@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CreateUserForm } from "./create-user-form";
+import { PageHeader } from "@/components/page-header";
 
 async function getCurrentUserRole(): Promise<string | null> {
   const supabase = await createClient();
@@ -26,10 +27,7 @@ export default async function CreateUserPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Create User</h1>
-        <p className="text-muted-foreground">Invite a new user to the system.</p>
-      </div>
+      <PageHeader title="Create User" subtitle="Invite a new user to the system." />
       <CreateUserForm />
     </div>
   );

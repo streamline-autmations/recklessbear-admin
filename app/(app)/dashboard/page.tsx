@@ -1,7 +1,9 @@
-﻿import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { PageHeader } from '@/components/page-header';
+import { AlertTriangle, TrendingUp, UserPlus, Users } from 'lucide-react';
 
 async function getCurrentUserRole(): Promise<string | null> {
   const supabase = await createClient();
@@ -188,18 +190,15 @@ export default async function DashboardPage() {
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">My leads summary</p>
-        </div>
+        <PageHeader title="Dashboard" subtitle="My leads summary" />
         <Card>
           <CardHeader>
             <CardTitle>My Leads Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <div className="text-3xl font-bold">{myLeadsCount}</div>
-              <p className="text-sm text-muted-foreground">Leads assigned to me</p>
+              <div className="text-3xl font-semibold tracking-tight">{myLeadsCount}</div>
+              <p className="mt-1 text-sm text-muted-foreground">Leads assigned to me</p>
             </div>
             <Button asChild className="min-h-[44px]">
               <Link href="/leads">View All Leads</Link>
@@ -228,44 +227,45 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview and statistics</p>
-      </div>
+      <PageHeader title="Dashboard" subtitle="Overview and statistics" />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalLeads}</div>
+            <div className="text-3xl font-semibold tracking-tight">{totalLeads}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Last 7 Days</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{leadsLast7Days}</div>
+            <div className="text-3xl font-semibold tracking-tight">{leadsLast7Days}</div>
             <p className="text-xs text-muted-foreground">New leads</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Unassigned</CardTitle>
+            <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{unassignedLeads}</div>
+            <div className="text-3xl font-semibold tracking-tight">{unassignedLeads}</div>
             <p className="text-xs text-muted-foreground">Need assignment</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Stale Leads</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{staleLeads}</div>
+            <div className="text-3xl font-semibold tracking-tight text-destructive">{staleLeads}</div>
             <p className="text-xs text-muted-foreground">No update in 48h+</p>
           </CardContent>
         </Card>
@@ -279,16 +279,16 @@ export default async function DashboardPage() {
             {Object.keys(leadsByStatus).length === 0 ? (
               <p className="text-sm text-muted-foreground">No leads found</p>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y">
                 {Object.entries(leadsByStatus)
                   .sort((a, b) => b[1] - a[1])
                   .map(([status, count]) => (
                     <div
                       key={status}
-                      className="flex items-center justify-between py-2 border-b last:border-0"
+                      className="flex items-center justify-between py-3"
                     >
                       <span className="text-sm font-medium">{status}</span>
-                      <span className="text-sm text-muted-foreground">{count}</span>
+                      <span className="text-sm tabular-nums text-muted-foreground">{count}</span>
                     </div>
                   ))}
               </div>
@@ -303,16 +303,16 @@ export default async function DashboardPage() {
             {repWorkload.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reps found</p>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y">
                 {repWorkload.map((rep) => (
                   <div
                     key={rep.rep_id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
+                    className="flex items-center justify-between py-3"
                   >
                     <span className="text-sm font-medium">
                       {rep.rep_name || rep.rep_id.substring(0, 8)}
                     </span>
-                    <span className="text-sm text-muted-foreground">{rep.lead_count} leads</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">{rep.lead_count} leads</span>
                   </div>
                 ))}
               </div>

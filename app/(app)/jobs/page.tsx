@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { JobsTableClient } from './jobs-table-client';
 import type { Lead } from '@/types/leads';
 import { RefreshButton } from '../leads/refresh-button';
+import { PageHeader } from '@/components/page-header';
 
 // Force dynamic rendering to always fetch latest data
 export const dynamic = "force-dynamic";
@@ -187,13 +188,11 @@ export default async function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Jobs</h1>
-          <p className="text-muted-foreground">Track production jobs and orders. ({totalCount} active)</p>
-        </div>
-        <RefreshButton />
-      </div>
+      <PageHeader
+        title="Jobs"
+        subtitle={`Track production jobs and orders. (${totalCount} active)`}
+        actions={<RefreshButton />}
+      />
       {leads.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">

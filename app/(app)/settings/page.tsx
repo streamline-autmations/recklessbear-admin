@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { SettingsForm } from './settings-form';
+import { PageHeader } from '@/components/page-header';
 
 interface SettingsPayload {
   whatsappAlertsEnabled: boolean;
@@ -49,10 +50,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">System Settings</h1>
-        <p className="text-muted-foreground">Only CEO/Admin may update alert channels.</p>
-      </div>
+      <PageHeader title="Settings" subtitle="Only CEO/Admin may update alert channels." />
 
       <Card>
         <CardHeader>

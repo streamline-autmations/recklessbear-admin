@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { UsersTableClient } from "./users-table-client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
 
 interface Profile {
   user_id: string;
@@ -54,17 +55,17 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage user profiles and roles.</p>
-        </div>
-        {userRole === "ceo" && (
-          <Button asChild className="min-h-[44px]">
-            <Link href="/users/new">Create User</Link>
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Users"
+        subtitle="Manage user profiles and roles."
+        actions={
+          userRole === "ceo" ? (
+            <Button asChild className="min-h-[44px]">
+              <Link href="/users/new">Create User</Link>
+            </Button>
+          ) : null
+        }
+      />
       <Card>
         <CardHeader>
           <CardTitle>Users List</CardTitle>

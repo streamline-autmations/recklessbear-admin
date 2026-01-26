@@ -1,6 +1,7 @@
 import { getConversations } from "./actions";
 import InboxClient from "./inbox-client";
 import { Metadata } from "next";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
   title: "Inbox | RecklessBear Admin",
@@ -10,11 +11,8 @@ export default async function InboxPage() {
   const conversations = await getConversations();
 
   return (
-    <div className="p-4 md:p-6 h-full">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
-        <p className="text-muted-foreground">WhatsApp integration (Beta)</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Inbox" subtitle="WhatsApp integration (Beta)" />
       <InboxClient initialConversations={conversations} />
     </div>
   );

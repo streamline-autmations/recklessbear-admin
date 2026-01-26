@@ -105,7 +105,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background border rounded-lg shadow-sm">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border bg-card/40 backdrop-blur">
       {/* Sidebar - Conversation List */}
       <div className={`w-full md:w-80 lg:w-96 border-r flex flex-col ${showChatOnMobile ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 border-b bg-muted/30">
@@ -200,7 +200,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950/50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -222,7 +222,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                         className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 ${
                           isMe
                             ? "bg-primary text-primary-foreground rounded-tr-none"
-                            : "bg-white dark:bg-slate-800 border rounded-tl-none shadow-sm"
+                            : "bg-card border rounded-tl-none shadow-sm"
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{msg.text}</p>

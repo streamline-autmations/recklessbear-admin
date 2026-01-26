@@ -4,6 +4,7 @@ import { LeadsTableClient } from './leads-table-client';
 import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';
 import type { Lead } from '@/types/leads';
 import { RefreshButton } from './refresh-button';
+import { PageHeader } from '@/components/page-header';
 
 // Force dynamic rendering to always fetch latest data
 export const dynamic = "force-dynamic";
@@ -274,13 +275,11 @@ export default async function LeadsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
-          <p className="text-muted-foreground">Manage and track your leads. ({totalCount} total)</p>
-        </div>
-        <RefreshButton />
-      </div>
+      <PageHeader
+        title="Leads"
+        subtitle={`Manage and track your leads. (${totalCount} total)`}
+        actions={<RefreshButton />}
+      />
       {leads.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -297,7 +296,9 @@ export default async function LeadsPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Leads List ({leads.length} {totalCount !== leads.length ? `of ${totalCount}` : ''})</CardTitle>
+            <CardTitle>
+              Leads List ({leads.length} {totalCount !== leads.length ? `of ${totalCount}` : ''})
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <LeadsTableClient initialLeads={leads} reps={reps} currentUserId={currentUserId} />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,10 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Search, MessageSquare, BarChart3, Briefcase, Package } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Input } from "@/components/ui/input";
+import { useTheme } from "next-themes";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -38,6 +39,43 @@ interface AppShellProps {
 export function AppShell({ children, userName, userRole }: AppShellProps) {
   const pathname = usePathname();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === "light";
+  const isDesktopCollapsed = isSidebarCollapsed;
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("rb-admin.sidebarCollapsed");
+      if (stored === "1") setIsSidebarCollapsed(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function toggleSidebar() {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem("rb-admin.sidebarCollapsed", next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
+
+  const logos = useMemo(() => {
+    const isDark = resolvedTheme !== "light";
+    return {
+      icon: isDark
+        ? "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/RB_LOGO_NEW_btabo8.png"
+        : "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/Logo-Black_tl2hbv.png",
+      word: isDark
+        ? "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410712/rb_text_dltvkg.png"
+        : "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410543/Word-Logo-Black_oh6by7.png",
+    };
+  }, [resolvedTheme]);
 
   // Get page title from current route
   const getPageTitle = () => {
@@ -61,8 +99,10 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
       return true;
     });
 
+    const collapsed = !mobile && isDesktopCollapsed;
+
     return (
-      <nav className={`flex ${mobile ? "flex-col" : "flex-col gap-3"}`}>
+      <nav id={!mobile ? "rb-sidebar-nav" : undefined} className={`flex ${mobile ? "flex-col" : "flex-col gap-3"}`}>
         {visibleNav.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
           return (
@@ -72,14 +112,25 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
               onClick={() => {
                 if (mobile) setIsSheetOpen(false);
               }}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              title={collapsed ? item.name : undefined}
+              aria-label={collapsed ? item.name : undefined}
+              aria-current={isActive ? "page" : undefined}
+              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-primary/10 text-foreground"
-                  : "text-muted-foreground hover:bg-border hover:text-foreground"
+                  ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))] before:absolute before:left-0 before:top-1/2 before:h-6 before:w-[3px] before:-translate-y-1/2 before:rounded-r before:bg-primary"
+                  : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--sidebar))] ${
+                collapsed ? "justify-center px-2" : ""
               }`}
             >
-              <item.icon className="h-4 w-4" />
-              {item.name}
+              <item.icon
+                className={`h-4 w-4 ${
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground group-hover:text-[hsl(var(--sidebar-foreground))]"
+                }`}
+              />
+              {!collapsed && item.name}
             </Link>
           );
         })}
@@ -88,19 +139,65 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
-      <aside className="hidden md:flex w-64 border-r border-border bg-card p-4 flex-shrink-0">
+    <div className="min-h-screen text-foreground flex">
+      <aside
+        className={`hidden md:flex border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] p-4 flex-shrink-0 transition-[width] duration-200 ${
+          isDesktopCollapsed ? "w-[92px] p-3" : "w-64 p-4"
+        }`}
+      >
         <div className="w-full">
-          <div className="mb-4 text-lg font-semibold text-foreground">
-            RecklessBear
-          </div>
-          <Separator className="mb-4" />
+          {isDesktopCollapsed ? (
+            <div className="mb-4 flex flex-col items-center gap-2 rounded-xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent))] px-2 py-3">
+              <Image src={logos.icon} alt="RecklessBear" width={32} height={32} className="h-8 w-8" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-9 w-9 rounded-lg text-muted-foreground hover:text-[hsl(var(--sidebar-foreground))]"
+                aria-label="Expand sidebar"
+                aria-expanded={false}
+                aria-controls="rb-sidebar-nav"
+                title="Expand"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent))] px-3 py-3">
+              <div className="flex items-center gap-3">
+                <Image src={logos.icon} alt="RecklessBear" width={32} height={32} className="h-8 w-8" />
+                <Image
+                  src={logos.word}
+                  alt="RecklessBear Admin"
+                  width={isLight ? 132 : 150}
+                  height={isLight ? 20 : 24}
+                  className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
+                  priority
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-9 w-9 rounded-lg text-muted-foreground hover:text-[hsl(var(--sidebar-foreground))]"
+                aria-label="Collapse sidebar"
+                aria-expanded
+                aria-controls="rb-sidebar-nav"
+                title="Collapse"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <Separator className="mb-4 bg-[hsl(var(--sidebar-border))]" />
           {renderNav()}
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 flex-shrink-0">
+        <header className="flex items-center justify-between border-b border-border bg-background/70 backdrop-blur px-4 py-3 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
               <SheetTrigger asChild>
@@ -109,30 +206,32 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                   <span className="sr-only">Open menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent className="w-64 p-4" side="left">
+              <SheetContent className="w-72 p-4 bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]" side="left">
                 <SheetHeader>
-                  <SheetTitle>Navigate</SheetTitle>
+                  <SheetTitle className="text-[hsl(var(--sidebar-foreground))]">
+                    <div className="flex items-center gap-3">
+                      <Image src={logos.icon} alt="RecklessBear" width={32} height={32} className="h-8 w-8" />
+                      <Image
+                        src={logos.word}
+                        alt="RecklessBear Admin"
+                        width={isLight ? 132 : 150}
+                        height={isLight ? 20 : 24}
+                        className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
+                        priority
+                      />
+                    </div>
+                  </SheetTitle>
                 </SheetHeader>
-                <Separator className="my-2" />
+                <Separator className="my-3 bg-[hsl(var(--sidebar-border))]" />
                 {renderNav(true)}
               </SheetContent>
             </Sheet>
-            <div className="flex-1">
-              <p className="text-sm text-muted-foreground">RecklessBear Admin</p>
-              <p className="text-xl font-semibold text-foreground">{getPageTitle()}</p>
+            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card/40">
+              <Image src={logos.icon} alt="RecklessBear" width={20} height={20} className="h-5 w-5" />
             </div>
-            {/* Optional: Global search placeholder - can be implemented later */}
-            <div className="hidden lg:flex items-center gap-2 max-w-xs w-full">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search..."
-                  className="pl-8 h-9"
-                  disabled
-                  aria-label="Global search (coming soon)"
-                />
-              </div>
+            <div className="flex-1">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground">RecklessBear Admin</p>
+              <p className="text-lg md:text-xl font-semibold text-foreground">{getPageTitle()}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -161,8 +260,8 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
           </div>
         </header>
 
-        <main className="bg-background p-4 md:p-6 flex-1 overflow-auto">
-          <div className="w-full">{children}</div>
+        <main className="p-4 md:p-6 flex-1 overflow-auto">
+          <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
       </div>
     </div>
