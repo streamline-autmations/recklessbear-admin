@@ -13,6 +13,7 @@ interface Note {
   id: string;
   lead_db_id: string;
   author_user_id: string;
+  author_display_name?: string | null;
   note: string;
   created_at: string;
 }
@@ -356,7 +357,25 @@ async function getNotes(leadId: string): Promise<Note[]> {
     return [];
   }
 
-  return data || [];
+  const notes = data || [];
+  const authorIds = Array.from(new Set(notes.map((n) => n.author_user_id).filter(Boolean)));
+  if (authorIds.length === 0) return notes;
+
+  const { data: profilesData } = await supabase
+    .from("profiles")
+    .select("user_id, full_name, email")
+    .in("user_id", authorIds);
+
+  const profileMap = new Map<string, string>();
+  (profilesData || []).forEach((p) => {
+    const label = p.full_name || p.email || p.user_id;
+    if (p.user_id && label) profileMap.set(p.user_id, label);
+  });
+
+  return notes.map((n) => ({
+    ...n,
+    author_display_name: profileMap.get(n.author_user_id) || null,
+  }));
 }
 
 async function getEvents(leadId: string): Promise<Event[]> {

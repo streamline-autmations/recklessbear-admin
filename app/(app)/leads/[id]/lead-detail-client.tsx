@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,12 +22,24 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
+import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { TrelloCreateButton } from "./trello-create-button";
+import { AttachmentGallery } from "./attachment-gallery";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, AlertCircle, CheckCircle2, Pencil, Trash2, Plus } from "lucide-react";
+import { ExternalLink, AlertCircle, CheckCircle2, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+
+const leadDetailTabs = [
+  { value: "overview", label: "Overview" },
+  { value: "quote", label: "Quote" },
+  { value: "booking", label: "Booking" },
+  { value: "question", label: "Question" },
+  { value: "timeline", label: "Timeline" },
+  { value: "notes", label: "Notes" },
+] as const;
+
+type LeadDetailTabValue = (typeof leadDetailTabs)[number]["value"];
 
 interface DisplayLead extends Lead {
   id?: string;
@@ -53,6 +65,7 @@ interface Note {
   id: string;
   lead_db_id: string;
   author_user_id: string;
+  author_display_name?: string | null;
   note: string;
   created_at: string;
 }
@@ -100,9 +113,75 @@ export function LeadDetailClient({
   const [repError, setRepError] = useState<string | null>(null);
   const [designNotes, setDesignNotes] = useState(lead.design_notes || "");
   const [isNotePending, startNoteTransition] = useTransition();
+  const [isDeleteNotePending, startDeleteNoteTransition] = useTransition();
+  const [pendingDeleteNoteId, setPendingDeleteNoteId] = useState<string | null>(null);
   const [isStatusPending, startStatusTransition] = useTransition();
   const [isRepPending, startRepTransition] = useTransition();
   const [isDesignNotesPending, startDesignNotesTransition] = useTransition();
+  const defaultTabOrder = useMemo<LeadDetailTabValue[]>(() => leadDetailTabs.map((t) => t.value), []);
+  const [activeTab, setActiveTab] = useState<LeadDetailTabValue>("overview");
+  const [tabOrder, setTabOrder] = useState<LeadDetailTabValue[]>(defaultTabOrder);
+  const [arrangeTabsOpen, setArrangeTabsOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("rb:leadDetailTabsOrder");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const known = new Set(leadDetailTabs.map((t) => t.value));
+      const next = parsed
+        .map(String)
+        .filter((v): v is LeadDetailTabValue => known.has(v as LeadDetailTabValue))
+        .filter((v, idx, arr) => arr.indexOf(v) === idx);
+      if (next.length > 0) setTabOrder(next);
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("rb:leadDetailTabsOrder", JSON.stringify(tabOrder));
+    } catch {
+    }
+  }, [tabOrder]);
+
+  const orderedTabs = useMemo(() => {
+    const known = new Set(leadDetailTabs.map((t) => t.value));
+    const normalized = tabOrder.filter((v) => known.has(v));
+    const missing = leadDetailTabs.map((t) => t.value).filter((v) => !normalized.includes(v));
+    const values = [...normalized, ...missing];
+    return values.map((v) => leadDetailTabs.find((t) => t.value === v)).filter(Boolean);
+  }, [tabOrder]);
+
+  useEffect(() => {
+    if (!orderedTabs.some((t) => t?.value === activeTab)) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, orderedTabs]);
+
+  function moveTab(value: LeadDetailTabValue, direction: "up" | "down") {
+    setTabOrder((prev) => {
+      const known = new Set(leadDetailTabs.map((t) => t.value));
+      const normalized = prev.filter((v) => known.has(v));
+      const missing = leadDetailTabs.map((t) => t.value).filter((v) => !normalized.includes(v));
+      const next = [...normalized, ...missing];
+      const idx = next.indexOf(value);
+      if (idx === -1) return prev;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= next.length) return prev;
+      const copy = [...next];
+      const [item] = copy.splice(idx, 1);
+      copy.splice(targetIdx, 0, item);
+      return copy;
+    });
+  }
+
+  function resetTabOrder() {
+    setTabOrder(defaultTabOrder);
+  }
 
   function formatDateSafe(dateString: string | null | undefined): string {
     if (!dateString) return "—";
@@ -119,6 +198,13 @@ export function LeadDetailClient({
     } catch {
       return "—";
     }
+  }
+
+  function getQuestionTopic(questionData: Record<string, unknown> | null | undefined): string | null {
+    const topic = questionData?.["topic"];
+    if (typeof topic !== "string") return null;
+    const trimmed = topic.trim();
+    return trimmed ? trimmed : null;
   }
 
   function normalizeStringArray(value: unknown): string[] {
@@ -235,6 +321,7 @@ export function LeadDetailClient({
     return legacy;
   })();
 
+  const questionTopic = getQuestionTopic(lead.question_data);
   const isDev = process.env.NODE_ENV !== "production";
 
   const isDbLead = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
@@ -471,21 +558,7 @@ export function LeadDetailClient({
 
   function formatAttachmentsValue() {
     if (attachmentUrls.length === 0) return "Not provided";
-    return (
-      <div className="space-y-2">
-        {attachmentUrls.map((url) => (
-          <a
-            key={url}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary hover:underline block break-all"
-          >
-            {url}
-          </a>
-        ))}
-      </div>
-    );
+    return <AttachmentGallery attachments={attachmentUrls} />;
   }
 
   function formatDeadlineValue() {
@@ -558,6 +631,24 @@ export function LeadDetailClient({
         toast.success("Note added successfully");
         router.refresh();
       }
+    });
+  }
+
+  function handleDeleteNote(noteId: string) {
+    if (!confirm("Delete this note?")) return;
+    const formData = new FormData();
+    formData.set("leadId", leadId);
+    formData.set("noteId", noteId);
+    setPendingDeleteNoteId(noteId);
+    startDeleteNoteTransition(async () => {
+      const result = await deleteNoteAction(formData);
+      setPendingDeleteNoteId(null);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Note deleted");
+      router.refresh();
     });
   }
 
@@ -691,15 +782,94 @@ export function LeadDetailClient({
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-6">
-          <TabsTrigger value="overview" className="min-h-[44px] text-xs sm:text-sm">Overview</TabsTrigger>
-          <TabsTrigger value="quote" className="min-h-[44px] text-xs sm:text-sm">Quote</TabsTrigger>
-          <TabsTrigger value="booking" className="min-h-[44px] text-xs sm:text-sm">Booking</TabsTrigger>
-          <TabsTrigger value="question" className="min-h-[44px] text-xs sm:text-sm">Question</TabsTrigger>
-          <TabsTrigger value="timeline" className="min-h-[44px] text-xs sm:text-sm">Timeline</TabsTrigger>
-          <TabsTrigger value="notes" className="min-h-[44px] text-xs sm:text-sm">Notes</TabsTrigger>
-        </TabsList>
+      <Dialog open={arrangeTabsOpen} onOpenChange={setArrangeTabsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Arrange Tabs</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {orderedTabs.map((tab, idx) => (
+              <div key={tab.value} className="flex items-center justify-between gap-2 rounded-md border p-2">
+                <div className="text-sm font-medium">{tab.label}</div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => moveTab(tab.value, "up")}
+                    disabled={idx === 0}
+                    aria-label="Move up"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => moveTab(tab.value, "down")}
+                    disabled={idx === orderedTabs.length - 1}
+                    aria-label="Move down"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={resetTabOrder} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+            <Button type="button" onClick={() => setArrangeTabsOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as LeadDetailTabValue)}
+        className="w-full"
+      >
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <div className="w-full sm:hidden">
+            <Select value={activeTab} onValueChange={(v) => setActiveTab(v as LeadDetailTabValue)}>
+              <SelectTrigger className="min-h-[44px] w-full">
+                <SelectValue placeholder="Select section" />
+              </SelectTrigger>
+              <SelectContent>
+                {orderedTabs.map((tab) => (
+                  <SelectItem key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="hidden sm:flex w-full items-center gap-2">
+            <TabsList className="grid w-full grid-cols-6">
+              {orderedTabs.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value} className="min-h-[44px] text-xs sm:text-sm">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 whitespace-nowrap"
+              onClick={() => setArrangeTabsOpen(true)}
+            >
+              Arrange
+            </Button>
+          </div>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
@@ -1142,26 +1312,52 @@ export function LeadDetailClient({
           {(lead.has_asked_question || lead.question_data || lead.question) ? (
             <Card>
               <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">Question</h3>
-                <div className="space-y-4">
+                <h3 className="text-lg font-semibold mb-4">Question Details</h3>
+                <div className="space-y-6">
+                  {/* Topic Field */}
+                  {questionTopic && (
+                    <div>
+                       <p className="text-sm font-medium mb-2">Topic</p>
+                       <span className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground shadow">
+                         {questionTopic}
+                       </span>
+                    </div>
+                  )}
+
+                  {/* Question Field */}
                   {lead.question && (
                     <div>
-                      <p className="text-sm font-medium mb-1">Question</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded">
+                      <p className="text-sm font-medium mb-2">Question</p>
+                      <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg border">
                         {lead.question}
-                      </p>
+                      </div>
                     </div>
                   )}
-                  {lead.question_data && Object.keys(lead.question_data).length > 0 && (
-                    <div>
-                      <details>
-                        <summary className="text-sm font-medium cursor-pointer">View Raw Question Data</summary>
-                        <pre className="text-xs text-muted-foreground font-mono mt-2 p-3 bg-muted rounded overflow-auto">
-                          {JSON.stringify(lead.question_data, null, 2)}
-                        </pre>
-                      </details>
+
+                  {/* Recommended Answer (Placeholder) */}
+                  <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-col space-y-1.5 p-4 border-b bg-muted/20">
+                      <div className="flex items-center justify-between">
+                         <h4 className="font-semibold leading-none tracking-tight text-sm flex items-center gap-2">
+                           Recommended Answer
+                           <span className="text-[10px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full border border-sky-200 font-normal">Beta</span>
+                         </h4>
+                         <Button variant="ghost" size="sm" className="h-7 text-xs" disabled>
+                           Regenerate
+                         </Button>
+                      </div>
                     </div>
-                  )}
+                    <div className="p-4">
+                       <div className="bg-sky-50/50 border border-sky-100 rounded-md p-4 text-center">
+                         <p className="text-sm text-muted-foreground">
+                           Chatbot integration pending. This area will soon provide AI-generated responses based on your Knowledge Base.
+                         </p>
+                         <Button variant="outline" size="sm" className="mt-3" disabled>
+                           Connect Knowledge Base
+                         </Button>
+                       </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1185,7 +1381,9 @@ export function LeadDetailClient({
                 <div className="relative">
                   <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-primary/20 border-2 border-primary"></div>
                   <p className="text-sm font-medium">Created</p>
-                  <p className="text-xs text-muted-foreground">{formatDateSafe(lead.submission_date)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateSafe(getQuoteValueFallback(lead.created_at, lead.submission_date))}
+                  </p>
                 </div>
 
                 {events.map((event) => (
@@ -1300,8 +1498,26 @@ export function LeadDetailClient({
                     <div key={note.id} className="border-b pb-4 last:border-0 last:pb-0">
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{note.author_user_id.substring(0, 8)}...</span>
-                          <span>{formatDateSafe(note.created_at)}</span>
+                          <span className="truncate">
+                            {note.author_display_name || `${note.author_user_id.substring(0, 8)}...`}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span>{formatDateSafe(note.created_at)}</span>
+                            {isCeoOrAdmin && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleDeleteNote(note.id)}
+                                disabled={isDeleteNotePending && pendingDeleteNoteId === note.id}
+                                aria-label="Delete note"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         <p className="text-sm whitespace-pre-wrap break-words">
                           {note.note}

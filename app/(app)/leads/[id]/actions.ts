@@ -9,6 +9,11 @@ const addNoteSchema = z.object({
   note: z.string().min(1, "Note cannot be empty").max(10000, "Note is too long"),
 });
 
+const deleteNoteSchema = z.object({
+  leadId: z.string().uuid(),
+  noteId: z.string().uuid(),
+});
+
 const changeStatusSchema = z.object({
   leadId: z.string().uuid(),
   status: z.enum(["New", "Assigned", "Contacted", "Quote Sent", "Quote Approved", "In Production", "Completed", "Lost"]),
@@ -102,6 +107,84 @@ export async function addNoteAction(formData: FormData): Promise<{ error?: strin
     actor_user_id: user.id,
     event_type: "note_added",
     payload: { notePreview },
+  });
+
+  revalidatePath(`/leads/${result.data.leadId}`);
+}
+
+export async function deleteNoteAction(formData: FormData): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    leadId: formData.get("leadId") as string,
+    noteId: formData.get("noteId") as string,
+  };
+
+  const result = deleteNoteSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("user_id", user.id)
+    .single();
+
+  const isCeoOrAdmin = profile?.role === "ceo" || profile?.role === "admin";
+
+  const { data: noteRow, error: noteFetchError } = await supabase
+    .from("lead_notes")
+    .select("id, lead_db_id, author_user_id")
+    .eq("id", result.data.noteId)
+    .eq("lead_db_id", result.data.leadId)
+    .maybeSingle();
+
+  if (noteFetchError) {
+    return { error: noteFetchError.message || "Failed to load note" };
+  }
+
+  if (!noteRow) {
+    return { error: "Note not found" };
+  }
+
+  if (!isCeoOrAdmin && noteRow.author_user_id !== user.id) {
+    const { data: leadRow } = await supabase
+      .from("leads")
+      .select("assigned_rep_id")
+      .eq("id", result.data.leadId)
+      .maybeSingle();
+
+    const isAssignedRep = leadRow?.assigned_rep_id === user.id;
+    if (!isAssignedRep) {
+      return { error: "Unauthorized" };
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("lead_notes")
+    .delete()
+    .eq("id", result.data.noteId)
+    .eq("lead_db_id", result.data.leadId);
+
+  if (deleteError) {
+    return { error: deleteError.message || "Failed to delete note" };
+  }
+
+  await supabase.from("lead_events").insert({
+    lead_db_id: result.data.leadId,
+    actor_user_id: user.id,
+    event_type: "note_deleted",
+    payload: { noteId: result.data.noteId },
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
