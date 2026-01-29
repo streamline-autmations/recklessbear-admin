@@ -5,20 +5,225 @@
 
 const TRELLO_API_BASE = "https://api.trello.com/1";
 
+// Trello List IDs mapping
+export const TRELLO_LISTS = {
+  ORDERS_AWAITING_CONFIRMATION: "688caf3f46d3b014e4913fb9",
+  NO_INVOICE_NUMBER: "688caf3f46d3b014e4913fba",
+  ORDERS: "688caf3f46d3b014e4913fbb",
+  SUPPLIER_ORDERS: "688caf7a8ffde4839a951019",
+  LAYOUTS_BUSY_COLLINE: "68ae5db69aebe84f388109db",
+  LAYOUTS_BUSY_ELZANA: "68ae5dbedd735ca4eb472fd0",
+  AWAITING_COLOR_MATCH: "68ae5dc5d89d3cacdd1cec13",
+  LAYOUTS_DONE_AWAITING_APPROVAL: "68ae5dcd567bcaa25140cb1d",
+  LAYOUTS_RECEIVED: "68ae5dd5267f5a1f3c44fe92",
+  PRINTING: "68ae5ddba9caff070ab893a1",
+  PRESSING: "68ae5de1f6b072287f954073",
+  CMT: "68ae5de6795bf974bdf77208",
+  CLEANING_PACKING: "68ae5df1464cf6e1d11cc5b6",
+  COMPLETED: "68ae5df615ac84ce7469209c",
+  FULL_PAYMENT_BEFORE_COLLECTION: "68ae5e022828b32fd969ca85",
+  FULL_PAYMENT_BEFORE_DELIVERY: "68ae864412c82cf93534903f",
+  READY_FOR_DELIVERY_COLLECTION: "68ae5e0eaf87030c27f97f04",
+  OUT_FOR_DELIVERY: "68ae5e1dd55be494039722a5",
+  DELIVERED_COLLECTED: "68ae5e2a43404cc8bb64abd4",
+} as const;
+
+// Map list IDs to production stages
+export const LIST_ID_TO_STAGE: Record<string, string> = {
+  "688caf3f46d3b014e4913fb9": "orders_awaiting_confirmation",
+  "688caf3f46d3b014e4913fba": "no_invoice_number",
+  "688caf3f46d3b014e4913fbb": "orders",
+  "688caf7a8ffde4839a951019": "supplier_orders",
+  "68ae5db69aebe84f388109db": "layouts_busy_colline",
+  "68ae5dbedd735ca4eb472fd0": "layouts_busy_elzana",
+  "68ae5dc5d89d3cacdd1cec13": "awaiting_color_match",
+  "68ae5dcd567bcaa25140cb1d": "layouts_done_awaiting_approval",
+  "68ae5dd5267f5a1f3c44fe92": "layouts_received",
+  "68ae5ddba9caff070ab893a1": "printing",
+  "68ae5de1f6b072287f954073": "pressing",
+  "68ae5de6795bf974bdf77208": "cmt",
+  "68ae5df1464cf6e1d11cc5b6": "cleaning_packing",
+  "68ae5df615ac84ce7469209c": "completed",
+  "68ae5e022828b32fd969ca85": "full_payment_before_collection",
+  "68ae864412c82cf93534903f": "full_payment_before_delivery",
+  "68ae5e0eaf87030c27f97f04": "ready_for_delivery_collection",
+  "68ae5e1dd55be494039722a5": "out_for_delivery",
+  "68ae5e2a43404cc8bb64abd4": "delivered_collected",
+};
+
+// Map production stages to list IDs
+export const STAGE_TO_LIST_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(LIST_ID_TO_STAGE).map(([k, v]) => [v, k])
+);
+
+export interface JobCardData {
+  leadId: string;
+  jobId: string;
+  customerName: string;
+  organization?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  invoiceNumber?: string | null;
+  paymentStatus: string;
+  orderQuantity?: number | null;
+  orderDeadline?: string | null;
+  productList?: string | null;
+  designNotes?: string | null;
+  productType?: string | null;
+}
+
+/**
+ * Generate the structured card description with machine-readable data
+ */
+export function generateCardDescription(data: JobCardData): string {
+  const humanReadable = `INVOICE NUMBER:
+${data.invoiceNumber || "[Enter Invoice # Here]"}
+
+📝 PLEASE COMPLETE THIS ORDER
+Instructions:
+Fill in the Invoice Number and Order ID.
+Update the Product Name and (Variant) on the first line of each block. Use (STD) for standard items.
+For each product, list the quantities and sizes needed (e.g., 4, M).
+
+👕 ORDER DETAILS
+Payment Status: ${data.paymentStatus || "Pending"}
+Order ID: ${data.jobId}
+Order Quantity: ${data.orderQuantity || "[Enter Total Quantity]"}
+Order Deadline: ${data.orderDeadline || "[Enter Deadline]"}
+
+---PRODUCT LIST---
+${data.productList || "Product Name (STD)\n[Qty], [Size]"}
+---END LIST---
+
+📞 CONTACT
+Name: ${data.customerName}
+Phone: ${data.phone || "[Enter Phone]"}
+Email: ${data.email || "[Enter Email]"}
+Organization: ${data.organization || "[Enter Organization]"}
+Location: ${data.location || "[Enter Location]"}
+
+🎨 DESIGN NOTES
+${data.designNotes || "[Add any final design notes here]"}`;
+
+  // Machine-readable section (hidden in HTML comment)
+  const machineData = `
+
+<!-- MACHINE DATA - DO NOT EDIT -->
+<!--
+LEAD_ID: ${data.leadId}
+JOB_ID: ${data.jobId}
+INVOICE: ${data.invoiceNumber || ""}
+PAYMENT_STATUS: ${data.paymentStatus}
+ORDER_QUANTITY: ${data.orderQuantity || ""}
+ORDER_DEADLINE: ${data.orderDeadline || ""}
+-->`;
+
+  return humanReadable + machineData;
+}
+
+/**
+ * Parse machine data from card description
+ */
+export function parseMachineData(description: string): Record<string, string> {
+  const machineDataMatch = description.match(/<!-- MACHINE DATA - DO NOT EDIT -->\s*<!--\s*([\s\S]*?)\s*-->/);
+  if (!machineDataMatch) return {};
+
+  const lines = machineDataMatch[1].split("\n");
+  const data: Record<string, string> = {};
+
+  for (const line of lines) {
+    const match = line.match(/^(\w+):\s*(.*)$/);
+    if (match) {
+      data[match[1]] = match[2].trim();
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Generate card name in the required format
+ */
+export function generateCardName(data: {
+  leadId: string;
+  customerName: string;
+  organization?: string | null;
+  productType?: string | null;
+}): string {
+  const displayName = data.organization || data.customerName;
+  const product = data.productType || "Custom Order";
+  return `[${data.leadId}] - ${displayName} - ${product}`;
+}
+
 /**
  * Get Trello card URL from card ID
- * This constructs the URL directly as Trello cards follow a predictable pattern
  */
 export function getTrelloCardUrl(cardId: string): string {
-  // Trello card URLs follow pattern: https://trello.com/c/{shortId}
-  // The cardId from database might be the short ID or full ID
-  // We'll use it as-is and Trello will handle it
   return `https://trello.com/c/${cardId}`;
 }
 
 /**
- * Create a Trello card via API
- * Requires TRELLO_API_KEY and TRELLO_TOKEN environment variables
+ * Create a Trello card for a job
+ */
+export async function createTrelloJobCard(data: JobCardData): Promise<
+  { id: string; url: string; shortUrl: string; listId: string } | { error: string }
+> {
+  const apiKey = process.env.TRELLO_API_KEY;
+  const token = process.env.TRELLO_TOKEN;
+
+  if (!apiKey || !token) {
+    return { error: "Trello API credentials not configured" };
+  }
+
+  // Determine starting list based on payment status
+  const listId = data.paymentStatus === "Paid" 
+    ? TRELLO_LISTS.ORDERS 
+    : TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION;
+
+  const cardName = generateCardName({
+    leadId: data.leadId,
+    customerName: data.customerName,
+    organization: data.organization,
+    productType: data.productType,
+  });
+
+  const cardDescription = generateCardDescription(data);
+
+  try {
+    const response = await fetch(`${TRELLO_API_BASE}/cards?key=${apiKey}&token=${token}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: cardName,
+        desc: cardDescription,
+        idList: listId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[trello] Error creating card:", errorText);
+      return { error: `Failed to create Trello card: ${response.statusText}` };
+    }
+
+    const card = await response.json();
+    return {
+      id: card.id,
+      url: card.url,
+      shortUrl: card.shortUrl,
+      listId: listId,
+    };
+  } catch (error) {
+    console.error("[trello] Error creating card:", error);
+    return { error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+/**
+ * Legacy function for backward compatibility
  */
 export async function createTrelloCard(params: {
   name: string;
@@ -28,16 +233,13 @@ export async function createTrelloCard(params: {
 }): Promise<{ id: string; url: string; shortUrl: string } | { error: string }> {
   const apiKey = process.env.TRELLO_API_KEY;
   const token = process.env.TRELLO_TOKEN;
-  const defaultListId = process.env.TRELLO_DEFAULT_LIST_ID;
+  const defaultListId = process.env.TRELLO_DEFAULT_LIST_ID || TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION;
 
   if (!apiKey || !token) {
     return { error: "Trello API credentials not configured" };
   }
 
   const listId = params.listId || defaultListId;
-  if (!listId) {
-    return { error: "Trello list ID not configured" };
-  }
 
   try {
     const response = await fetch(`${TRELLO_API_BASE}/cards?key=${apiKey}&token=${token}`, {
@@ -78,7 +280,6 @@ export async function getTrelloCard(cardId: string): Promise<{ url: string } | {
   const token = process.env.TRELLO_TOKEN;
 
   if (!apiKey || !token) {
-    // Fallback: construct URL directly
     return { url: getTrelloCardUrl(cardId) };
   }
 
@@ -88,7 +289,6 @@ export async function getTrelloCard(cardId: string): Promise<{ url: string } | {
     );
 
     if (!response.ok) {
-      // Fallback: construct URL directly
       return { url: getTrelloCardUrl(cardId) };
     }
 
@@ -96,7 +296,88 @@ export async function getTrelloCard(cardId: string): Promise<{ url: string } | {
     return { url: card.url || getTrelloCardUrl(cardId) };
   } catch (error) {
     console.error("[trello] Error fetching card:", error);
-    // Fallback: construct URL directly
     return { url: getTrelloCardUrl(cardId) };
+  }
+}
+
+/**
+ * Move a Trello card to a different list
+ */
+export async function moveTrelloCard(
+  cardId: string,
+  listId: string
+): Promise<{ success: boolean } | { error: string }> {
+  const apiKey = process.env.TRELLO_API_KEY;
+  const token = process.env.TRELLO_TOKEN;
+
+  if (!apiKey || !token) {
+    return { error: "Trello API credentials not configured" };
+  }
+
+  try {
+    const response = await fetch(
+      `${TRELLO_API_BASE}/cards/${cardId}?key=${apiKey}&token=${token}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idList: listId,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[trello] Error moving card:", errorText);
+      return { error: `Failed to move Trello card: ${response.statusText}` };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("[trello] Error moving card:", error);
+    return { error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+/**
+ * Update Trello card description
+ */
+export async function updateTrelloCardDescription(
+  cardId: string,
+  description: string
+): Promise<{ success: boolean } | { error: string }> {
+  const apiKey = process.env.TRELLO_API_KEY;
+  const token = process.env.TRELLO_TOKEN;
+
+  if (!apiKey || !token) {
+    return { error: "Trello API credentials not configured" };
+  }
+
+  try {
+    const response = await fetch(
+      `${TRELLO_API_BASE}/cards/${cardId}?key=${apiKey}&token=${token}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          desc: description,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[trello] Error updating card:", errorText);
+      return { error: `Failed to update Trello card: ${response.statusText}` };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("[trello] Error updating card:", error);
+    return { error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
