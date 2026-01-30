@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getFunnelData, getRepPerformanceData, getProductionPipelineData, getStockAlerts } from "./actions";
+import { getFunnelData, getRepPerformanceData, getProductionPipelineData, getStockAlerts, getProductionStageTimes, getTopConsumedMaterials } from "./actions";
 import { LeadsFunnel } from "./components/leads-funnel";
 import { RepPerformance } from "./components/rep-performance";
 import { ProductionPipeline } from "./components/production-pipeline";
 import { StockAlerts } from "./components/stock-alerts";
+import { ProductionStageTimes } from "./components/production-stage-times";
+import { TopConsumedMaterials } from "./components/top-consumed-materials";
 import { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 
@@ -77,13 +79,12 @@ export default async function AnalyticsPage() {
           <RepPerformance data={repData} />
         </TabsContent>
         
-        <TabsContent value="production" className="space-y-4">
           <ProductionPipeline data={pipelineData} />
         </TabsContent>
 
         <TabsContent value="stock" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <StockAlerts data={stockAlerts} />
+            {/* Can add stock movements chart later */}
             {/* Can add stock movements chart later */}
           </div>
         </TabsContent>

@@ -102,17 +102,6 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString();
-  };
-
-  return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border bg-card/40 backdrop-blur">
-      {/* Sidebar - Conversation List */}
-      <div className={`w-full md:w-80 lg:w-96 border-r flex flex-col ${showChatOnMobile ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 border-b bg-muted/30">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
               placeholder="Search conversations..."
               className="pl-9"
               value={searchQuery}
@@ -244,14 +233,16 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
 
             {/* Input Area */}
             <div className="p-4 border-t bg-background">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <Input
+              <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+                <Textarea
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Type a message..."
-                  className="flex-1"
+                  className="flex-1 min-h-[40px] max-h-[120px] resize-none py-3"
+                  rows={1}
                 />
-                <Button type="submit" disabled={!newMessage.trim() || isSending}>
+                <Button type="submit" size="icon" disabled={!newMessage.trim() || isSending} className="mb-0.5">
                   <Send className="h-4 w-4" />
                 </Button>
               </form>

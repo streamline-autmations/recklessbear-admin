@@ -41,8 +41,14 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { resolvedTheme } = useTheme();
-  const isLight = resolvedTheme === "light";
+  const [mounted, setMounted] = useState(false);
+  const themeForRender = mounted ? resolvedTheme : "light";
+  const isLight = themeForRender === "light";
   const isDesktopCollapsed = isSidebarCollapsed;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
@@ -66,7 +72,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   }
 
   const logos = useMemo(() => {
-    const isDark = resolvedTheme !== "light";
+    const isDark = themeForRender !== "light";
     return {
       icon: isDark
         ? "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/RB_LOGO_NEW_btabo8.png"
@@ -75,7 +81,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
         ? "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410712/rb_text_dltvkg.png"
         : "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410543/Word-Logo-Black_oh6by7.png",
     };
-  }, [resolvedTheme]);
+  }, [themeForRender]);
 
   // Get page title from current route
   const getPageTitle = () => {

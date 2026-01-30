@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   // Get lead details
   const { data: lead, error: leadError } = await supabase
     .from("leads")
-    .select("id, lead_id, customer_name, name, card_id")
+    .select("id, lead_id, customer_name, name, email, phone, organization, trello_product_list, design_notes, delivery_date, card_id")
     .eq("id", leadId)
     .single();
 
@@ -48,7 +48,26 @@ export async function GET(request: NextRequest) {
 
   // Create Trello card
   const cardName = `Lead: ${lead.customer_name || lead.name || lead.lead_id}`;
-  const cardDescription = `Lead ID: ${lead.lead_id}\n\nCreated from RecklessBear Admin`;
+  
+  const descriptionParts = [
+    `Lead ID: ${lead.lead_id}`,
+    `Customer: ${lead.customer_name || lead.name || "N/A"}`,
+    `Email: ${lead.email || "N/A"}`,
+    `Phone: ${lead.phone || "N/A"}`,
+    `Organization: ${lead.organization || "N/A"}`,
+    lead.delivery_date ? `Delivery Date: ${lead.delivery_date}` : null,
+    "",
+    "---PRODUCT LIST---",
+    lead.trello_product_list || "(No product list provided)",
+    "---END LIST---",
+    "",
+    "Design Notes:",
+    lead.design_notes || "(No design notes)",
+    "",
+    "Created from RecklessBear Admin"
+  ];
+
+  const cardDescription = descriptionParts.filter(part => part !== null).join("\n");
 
   const result = await createTrelloCard({
     name: cardName,
