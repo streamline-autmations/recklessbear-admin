@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WhatsAppConversation, WhatsAppMessage } from "@/types/inbox";
 import { getMessages, sendMessageAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Search, Send, ArrowLeft, Phone, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,20 +23,16 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  
-  // Mobile view state
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load messages when conversation selected
   useEffect(() => {
     if (selectedId) {
       setIsLoadingMessages(true);
@@ -48,19 +45,19 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
           console.error(err);
           setIsLoadingMessages(false);
         });
-        
+
       if (window.innerWidth < 768) {
         setShowChatOnMobile(true);
       }
     }
   }, [selectedId]);
 
-  const filteredConversations = conversations.filter(c => {
+  const filteredConversations = conversations.filter((c) => {
     const term = searchQuery.toLowerCase();
     return (
-      c.phone.includes(term) ||
-      c.lead?.name?.toLowerCase().includes(term) ||
-      c.lead?.organization?.toLowerCase().includes(term)
+      c.phone.toLowerCase().includes(term) ||
+      (c.lead?.name || "").toLowerCase().includes(term) ||
+      (c.lead?.organization || "").toLowerCase().includes(term)
     );
   });
 
@@ -88,10 +85,9 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
 
     if (result && "error" in result) {
       toast.error("Failed to send message");
-      // Revert optimistic update? Or just show error.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } else {
-      // Success - maybe refresh messages or let the real data come in later
-      // For now we assume success
+      toast.success("Message sent");
     }
     setIsSending(false);
   };
@@ -99,9 +95,26 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
-  
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void handleSendMessage(e as unknown as React.FormEvent);
+    }
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
+      <div className={`w-full md:w-80 border-r flex flex-col ${showChatOnMobile ? "hidden md:flex" : "flex"}`}>
+        <div className="p-4 border-b bg-muted/30">
+          <div className="font-semibold text-lg">Conversations</div>
+          <div className="relative mt-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
               placeholder="Search conversations..."
               className="pl-9"
               value={searchQuery}
@@ -109,25 +122,23 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
             />
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto">
           {filteredConversations.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              No conversations found
-            </div>
+            <div className="p-8 text-center text-muted-foreground">No conversations found</div>
           ) : (
             filteredConversations.map((conv) => (
               <div
                 key={conv.id}
                 onClick={() => setSelectedId(conv.id)}
                 className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
-                  selectedId === conv.id ? "bg-muted border-l-4 border-l-primary" : "border-l-4 border-l-transparent"
+                  selectedId === conv.id
+                    ? "bg-muted border-l-4 border-l-primary"
+                    : "border-l-4 border-l-transparent"
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <div className="font-semibold truncate pr-2">
-                    {conv.lead?.name || conv.phone}
-                  </div>
+                  <div className="font-semibold truncate pr-2">{conv.lead?.name || conv.phone}</div>
                   <div className="text-xs text-muted-foreground whitespace-nowrap">
                     {formatDate(conv.last_message_at)}
                   </div>
@@ -137,7 +148,10 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                     {conv.lead?.organization || conv.phone}
                   </div>
                   {conv.unread_count > 0 && (
-                    <Badge variant="destructive" className="rounded-full h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                    <Badge
+                      variant="destructive"
+                      className="rounded-full h-5 w-5 flex items-center justify-center p-0 text-[10px]"
+                    >
                       {conv.unread_count}
                     </Badge>
                   )}
@@ -148,33 +162,36 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col ${!showChatOnMobile ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 flex flex-col ${!showChatOnMobile ? "hidden md:flex" : "flex"}`}>
         {selectedConversation ? (
           <>
-            {/* Chat Header */}
             <div className="p-4 border-b flex items-center justify-between bg-muted/30">
               <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="md:hidden"
                   onClick={() => setShowChatOnMobile(false)}
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <Avatar>
-                  <AvatarFallback>{selectedConversation.lead?.name?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
+                  <AvatarFallback>
+                    {selectedConversation.lead?.name?.substring(0, 2).toUpperCase() || "U"}
+                  </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="font-semibold flex items-center gap-2">
                     {selectedConversation.lead?.name || selectedConversation.phone}
                     {selectedConversation.lead && (
-                      <Badge variant="outline" className="text-[10px] h-5">Lead</Badge>
+                      <Badge variant="outline" className="text-[10px] h-5">
+                        Lead
+                      </Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {selectedConversation.phone} {selectedConversation.lead?.organization && `• ${selectedConversation.lead.organization}`}
+                    {selectedConversation.phone}
+                    {selectedConversation.lead?.organization ? ` • ${selectedConversation.lead.organization}` : ""}
                   </div>
                 </div>
               </div>
@@ -188,11 +205,10 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
               </div>
             </div>
 
-            {/* Messages List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -203,10 +219,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 messages.map((msg) => {
                   const isMe = msg.direction === "outbound";
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                    >
+                    <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 ${
                           isMe
@@ -215,11 +228,19 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                        <div className={`text-[10px] mt-1 text-right ${isMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                        <div
+                          className={`text-[10px] mt-1 text-right ${
+                            isMe ? "text-primary-foreground/70" : "text-muted-foreground"
+                          }`}
+                        >
                           {formatTime(msg.created_at)}
                           {isMe && (
                             <span className="ml-1">
-                              {msg.status === "read" ? "✓✓" : msg.status === "delivered" ? "✓✓" : "✓"}
+                              {msg.status === "read"
+                                ? "✓✓"
+                                : msg.status === "delivered"
+                                  ? "✓✓"
+                                  : "✓"}
                             </span>
                           )}
                         </div>
@@ -231,7 +252,6 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
             <div className="p-4 border-t bg-background">
               <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
                 <Textarea
@@ -242,7 +262,12 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                   className="flex-1 min-h-[40px] max-h-[120px] resize-none py-3"
                   rows={1}
                 />
-                <Button type="submit" size="icon" disabled={!newMessage.trim() || isSending} className="mb-0.5">
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!newMessage.trim() || isSending}
+                  className="mb-0.5"
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </form>

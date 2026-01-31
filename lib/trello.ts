@@ -71,14 +71,15 @@ export interface JobCardData {
   productList?: string | null;
   designNotes?: string | null;
   productType?: string | null;
+  listId?: string | null;
 }
 
 /**
  * Generate the structured card description with machine-readable data
  */
 export function generateCardDescription(data: JobCardData): string {
-  const humanReadable = `INVOICE NUMBER:
-${data.invoiceNumber || "[Enter Invoice # Here]"}
+  const template = `INVOICE NUMBER:
+[INVOICE_NUMBER]
 
 📝 PLEASE COMPLETE THIS ORDER
 Instructions:
@@ -87,39 +88,45 @@ Update the Product Name and (Variant) on the first line of each block. Use (STD)
 For each product, list the quantities and sizes needed (e.g., 4, M).
 
 👕 ORDER DETAILS
-Payment Status: ${data.paymentStatus || "Pending"}
-Order ID: ${data.jobId}
-Order Quantity: ${data.orderQuantity || "[Enter Total Quantity]"}
-Order Deadline: ${data.orderDeadline || "[Enter Deadline]"}
+Payment Status: [PAYMENT_STATUS]
+Order ID: [ORDER_ID]
+Order Quantity: [ORDER_QUANTITY]
+Order Deadline: [ORDER_DEADLINE]
 
 ---PRODUCT LIST---
-${data.productList || "Product Name (STD)\n[Qty], [Size]"}
+[PRODUCT_LIST]
 ---END LIST---
 
 📞 CONTACT
-Name: ${data.customerName}
-Phone: ${data.phone || "[Enter Phone]"}
-Email: ${data.email || "[Enter Email]"}
-Organization: ${data.organization || "[Enter Organization]"}
-Location: ${data.location || "[Enter Location]"}
+Name: [CONTACT_NAME]
+Phone: [CONTACT_PHONE]
+Email: [CONTACT_EMAIL]
+Organization: [CONTACT_ORG]
+Location: [CONTACT_LOCATION]
 
 🎨 DESIGN NOTES
-${data.designNotes || "[Add any final design notes here]"}`;
+[DESIGN_NOTES]`;
 
-  // Machine-readable section (hidden in HTML comment)
-  const machineData = `
+  const filled = template
+    .replace("[INVOICE_NUMBER]", data.invoiceNumber || "[INVOICE_NUMBER]")
+    .replace("[PAYMENT_STATUS]", data.paymentStatus || "[PAYMENT_STATUS]")
+    .replace("[ORDER_ID]", data.jobId || "[ORDER_ID]")
+    .replace(
+      "[ORDER_QUANTITY]",
+      data.orderQuantity === null || data.orderQuantity === undefined
+        ? "[ORDER_QUANTITY]"
+        : String(data.orderQuantity)
+    )
+    .replace("[ORDER_DEADLINE]", data.orderDeadline || "[ORDER_DEADLINE]")
+    .replace("[PRODUCT_LIST]", data.productList || "[PRODUCT_LIST]")
+    .replace("[CONTACT_NAME]", data.customerName || "[CONTACT_NAME]")
+    .replace("[CONTACT_PHONE]", data.phone || "[CONTACT_PHONE]")
+    .replace("[CONTACT_EMAIL]", data.email || "[CONTACT_EMAIL]")
+    .replace("[CONTACT_ORG]", data.organization || "[CONTACT_ORG]")
+    .replace("[CONTACT_LOCATION]", data.location || "[CONTACT_LOCATION]")
+    .replace("[DESIGN_NOTES]", data.designNotes || "[DESIGN_NOTES]");
 
-<!-- MACHINE DATA - DO NOT EDIT -->
-<!--
-LEAD_ID: ${data.leadId}
-JOB_ID: ${data.jobId}
-INVOICE: ${data.invoiceNumber || ""}
-PAYMENT_STATUS: ${data.paymentStatus}
-ORDER_QUANTITY: ${data.orderQuantity || ""}
-ORDER_DEADLINE: ${data.orderDeadline || ""}
--->`;
-
-  return humanReadable + machineData;
+  return filled;
 }
 
 /**
@@ -176,10 +183,9 @@ export async function createTrelloJobCard(data: JobCardData): Promise<
     return { error: "Trello API credentials not configured" };
   }
 
-  // Determine starting list based on payment status
-  const listId = data.paymentStatus === "Paid" 
-    ? TRELLO_LISTS.ORDERS 
-    : TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION;
+  const listId =
+    data.listId ||
+    (data.paymentStatus === "Paid" ? TRELLO_LISTS.ORDERS : TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION);
 
   const cardName = generateCardName({
     leadId: data.leadId,
@@ -339,6 +345,60 @@ export async function moveTrelloCard(
     console.error("[trello] Error moving card:", error);
     return { error: error instanceof Error ? error.message : "Unknown error" };
   }
+}
+
+export type ParsedProductLineItem = {
+  product_type: string;
+  size: string | null;
+  quantity: number;
+};
+
+export function extractProductListSection(description: string): string | null {
+  const startMarker = "---PRODUCT LIST---";
+  const endMarker = "---END LIST---";
+  const startIdx = description.indexOf(startMarker);
+  if (startIdx === -1) return null;
+  const endIdx = description.indexOf(endMarker, startIdx + startMarker.length);
+  if (endIdx === -1) return null;
+  return description.slice(startIdx + startMarker.length, endIdx).trim();
+}
+
+export function parseProductListSection(section: string): ParsedProductLineItem[] {
+  const lines = section
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const items: ParsedProductLineItem[] = [];
+  let currentProduct: string | null = null;
+
+  for (const line of lines) {
+    if (/^---.*---$/.test(line)) {
+      currentProduct = null;
+      continue;
+    }
+
+    if (!currentProduct) {
+      currentProduct = line;
+      continue;
+    }
+
+    const parts = line.split(",").map((p) => p.trim());
+    if (parts.length < 2) continue;
+
+    const qty = Number(parts[0]);
+    const size = parts.slice(1).join(",").trim();
+
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+
+    items.push({
+      product_type: currentProduct,
+      size: size.length ? size : null,
+      quantity: qty,
+    });
+  }
+
+  return items;
 }
 
 /**

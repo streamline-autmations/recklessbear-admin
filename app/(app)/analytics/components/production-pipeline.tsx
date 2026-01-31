@@ -7,26 +7,39 @@ interface ProductionPipelineProps {
   data: ProductionPipelineData[];
 }
 
+function formatDuration(seconds: number | null): string {
+  if (!seconds || seconds <= 0) return "—";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 export function ProductionPipeline({ data }: ProductionPipelineProps) {
-  // Sort by count desc
-  const sortedData = [...data].sort((a, b) => b.count - a.count);
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const sortedData = [...data].sort((a, b) => b.currentCount - a.currentCount);
+  const maxCount = Math.max(...data.map((d) => d.currentCount), 1);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Production Pipeline</CardTitle>
-        <CardDescription>Active jobs by production stage</CardDescription>
+        <CardDescription>Active jobs by stage, with time-in-stage guardrails</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {sortedData.map((item) => {
-          const percentage = Math.round((item.count / maxCount) * 100);
+          const percentage = Math.round((item.currentCount / maxCount) * 100);
           
           return (
             <div key={item.stage} className="space-y-1">
               <div className="flex justify-between text-sm font-medium">
                 <span className="truncate pr-4">{item.stage}</span>
-                <span className="text-muted-foreground">{item.count}</span>
+                <span className="text-muted-foreground">{item.currentCount}</span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>Still in stage: {item.stillInStageCount}</span>
+                <span>Avg: {formatDuration(item.avgSecondsCompletedTransitions)}</span>
               </div>
               <div className="h-3 w-full rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
                 <div

@@ -42,8 +42,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const themeForRender = mounted ? resolvedTheme : "light";
-  const isLight = themeForRender === "light";
+  const themeForRender = mounted ? resolvedTheme : "dark";
   const isDesktopCollapsed = isSidebarCollapsed;
 
   useEffect(() => {
@@ -176,9 +175,9 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                 <Image
                   src={logos.word}
                   alt="RecklessBear Admin"
-                  width={isLight ? 132 : 150}
-                  height={isLight ? 20 : 24}
-                  className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
+                  width={150}
+                  height={24}
+                  className="h-6 w-[150px] object-contain"
                   priority
                 />
               </div>
@@ -220,9 +219,9 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                       <Image
                         src={logos.word}
                         alt="RecklessBear Admin"
-                        width={isLight ? 132 : 150}
-                        height={isLight ? 20 : 24}
-                        className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
+                        width={150}
+                        height={24}
+                        className="h-6 w-[150px] object-contain"
                         priority
                       />
                     </div>
