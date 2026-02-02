@@ -1,0 +1,473 @@
+{
+  "name": "RB – WhatsApp Incoming → Supabase Inbox",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ]
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        120
+      ],
+      "id": "e3cd99b4-23bf-471d-8c83-4b9d69cecf15",
+      "name": "WhatsApp Cloud API Trigger",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{\n  !!$json.entry?.[0]?.changes?.[0]?.value?.messages?.[0]\n  && $json.entry[0].changes[0].value.metadata.phone_number_id === $env.RB_PHONE_NUMBER_ID\n}}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        120
+      ],
+      "id": "2f39dd82-d063-4617-9b79-b21794022630",
+      "name": "IF – Filter RecklessBear inbound only"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "conversation_phone",
+              "value": "={{$json.entry[0].changes[0].value.messages[0].from}}"
+            },
+            {
+              "name": "wa_message_id",
+              "value": "={{$json.entry[0].changes[0].value.messages[0].id}}"
+            },
+            {
+              "name": "message_type",
+              "value": "={{$json.entry[0].changes[0].value.messages[0].type}}"
+            },
+            {
+              "name": "message_text",
+              "value": "={{$json.entry[0].changes[0].value.messages[0].text?.body || ''}}"
+            },
+            {
+              "name": "provider",
+              "value": "whatsapp"
+            },
+            {
+              "name": "sent_at",
+              "value": "={{\n  new Date(\n    Number($json.entry[0].changes[0].value.messages[0].timestamp) * 1000\n  ).toISOString()\n}}"
+            }
+          ],
+          "json": [
+            {
+              "name": "raw_payload",
+              "value": "={{$json}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        120
+      ],
+      "id": "606b6148-1121-49c5-a6a6-501d2d520a9a",
+      "name": "Set - Normalize Incoming Message"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages'}}",
+        "method": "GET",
+        "sendQuery": true,
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "select",
+              "value": "id"
+            },
+            {
+              "name": "provider_message_id",
+              "value": "={{'eq.' + $json.wa_message_id}}"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "authentication": "none",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -200,
+        120
+      ],
+      "id": "7bd2348c-0423-4206-9e1c-aa9b473abe99",
+      "name": "HTTP – Check if Message Exists (Idempotency)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        40,
+        120
+      ],
+      "id": "79302524-f2ca-46a5-9ab9-2105f33c3490",
+      "name": "IF – Duplicate Message?"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_conversations?on_conflict=phone'}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"phone\": $node[\"Set - Normalize Incoming Message\"].json.conversation_phone,\n  \"provider\": \"whatsapp\",\n  \"last_message_at\": $node[\"Set - Normalize Incoming Message\"].json.sent_at,\n  \"last_message_preview\": ($node[\"Set - Normalize Incoming Message\"].json.message_text || \"\").slice(0, 140)\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        300,
+        260
+      ],
+      "id": "98e738b4-04df-4b4e-8248-2526f8079c34",
+      "name": "HTTP – Upsert Conversation"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "conversation_id",
+              "value": "={{$json?.[0]?.id || $json?.id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        540,
+        260
+      ],
+      "id": "40f72f0f-87af-47b2-9e31-7688cdef1a3f",
+      "name": "Set – Conversation ID"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/leads'}}",
+        "method": "GET",
+        "sendQuery": true,
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "select",
+              "value": "id,last_activity_at,assigned_rep_id"
+            },
+            {
+              "name": "phone",
+              "value": "={{'eq.' + $node[\"Set - Normalize Incoming Message\"].json.conversation_phone}}"
+            },
+            {
+              "name": "order",
+              "value": "last_activity_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "authentication": "none",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        780,
+        260
+      ],
+      "id": "d31cf751-8ada-4d50-8008-212ab2e76efa",
+      "name": "HTTP – Find Lead by Phone"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        260
+      ],
+      "id": "42d61e32-a141-405f-abb0-c49c3f362425",
+      "name": "IF – Lead Found?"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_conversations?id=eq.' + $node[\"Set – Conversation ID\"].json.conversation_id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"lead_id\": $json[0].id\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1260,
+        120
+      ],
+      "id": "400a421a-f19b-4650-b837-27b5177b7fe5",
+      "name": "HTTP – Link Conversation to Lead (TRUE path)"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/leads?id=eq.' + $json[0].id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"last_activity_at\": new Date().toISOString()\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1500,
+        120
+      ],
+      "id": "a32dac91-9675-4f4e-9588-a2d727a0373b",
+      "name": "HTTP – Update Lead Activity Timestamp"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages'}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"conversation_id\": $node[\"Set – Conversation ID\"].json.conversation_id,\n  \"direction\": \"inbound\",\n  \"message_type\": $node[\"Set - Normalize Incoming Message\"].json.message_type,\n  \"body\": $node[\"Set - Normalize Incoming Message\"].json.message_text,\n  \"provider_message_id\": $node[\"Set - Normalize Incoming Message\"].json.wa_message_id,\n  \"sent_at\": $node[\"Set - Normalize Incoming Message\"].json.sent_at,\n  \"raw_payload\": $node[\"Set - Normalize Incoming Message\"].json.raw_payload\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1500,
+        340
+      ],
+      "id": "577dcabc-0ec2-4f54-b318-6e35972d5b95",
+      "name": "HTTP – Insert Inbound Message"
+    }
+  ],
+  "connections": {
+    "WhatsApp Cloud API Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF – Filter RecklessBear inbound only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Filter RecklessBear inbound only": {
+      "main": [
+        [
+          {
+            "node": "Set - Normalize Incoming Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Set - Normalize Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Check if Message Exists (Idempotency)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Check if Message Exists (Idempotency)": {
+      "main": [
+        [
+          {
+            "node": "IF – Duplicate Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Duplicate Message?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP – Upsert Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Upsert Conversation": {
+      "main": [
+        [
+          {
+            "node": "Set – Conversation ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set – Conversation ID": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Find Lead by Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Find Lead by Phone": {
+      "main": [
+        [
+          {
+            "node": "IF – Lead Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Lead Found?": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Link Conversation to Lead (TRUE path)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP – Insert Inbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Link Conversation to Lead (TRUE path)": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Update Lead Activity Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Update Lead Activity Timestamp": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Insert Inbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9ac6b8c6f4c34b8c9a1f1b5a0f5b8f6b"
+}

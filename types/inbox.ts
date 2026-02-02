@@ -17,7 +17,7 @@ export interface WhatsAppMessage {
   conversation_id: string;
   direction: "inbound" | "outbound";
   text: string;
-  status: "sent" | "delivered" | "read" | "failed";
+  status: "queued" | "sending" | "simulated_sent" | "sent" | "delivered" | "read" | "failed";
   created_at: string;
   created_by: string | null;
 }

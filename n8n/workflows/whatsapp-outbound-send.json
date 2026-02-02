@@ -1,0 +1,514 @@
+{
+  "name": "RB – WhatsApp Outbound Send (Queued → WhatsApp)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        140
+      ],
+      "id": "8d6e7bb1-bf4a-4a83-bb9a-17f7a4d0c7a1",
+      "name": "Cron – Every Minute"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages'}}",
+        "method": "GET",
+        "sendQuery": true,
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "select",
+              "value": "id,conversation_id,text,retry_count,status,to_phone"
+            },
+            {
+              "name": "direction",
+              "value": "eq.outbound"
+            },
+            {
+              "name": "status",
+              "value": "eq.queued"
+            },
+            {
+              "name": "order",
+              "value": "created_at.asc"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "authentication": "none",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -680,
+        140
+      ],
+      "id": "b1aa9a01-1e2e-420c-9875-0c0ed6f1a2b0",
+      "name": "HTTP – Fetch Queued Outbound"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -440,
+        140
+      ],
+      "id": "b857c20d-9fb5-4f6a-86ee-b86d0d0b4f05",
+      "name": "Split In Batches"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages?id=eq.' + $json.id + '&status=eq.queued'}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"status\": \"sending\"\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -200,
+        140
+      ],
+      "id": "b04f2db5-7e0c-4b06-8c61-7ea1d1d5a55c",
+      "name": "HTTP – Lock Message (queued→sending)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        40,
+        140
+      ],
+      "id": "a5e1d69e-6c11-4b11-a5dc-8b13d5f47b6c",
+      "name": "IF – Lock Acquired?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $env.SAFE_MODE === true || $env.SAFE_MODE === 'true' }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        300,
+        140
+      ],
+      "id": "c9d1ac13-6f6d-49b5-b6e2-4d5b65f0d2bf",
+      "name": "IF – SAFE_MODE?"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages?id=eq.' + $node[\"HTTP – Lock Message (queued→sending)\"].json[0].id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"status\": \"simulated_sent\",\n  \"sent_at\": new Date().toISOString(),\n  \"provider_payload\": {\n    \"simulated\": true,\n    \"reason\": \"SAFE_MODE enabled\"\n  }\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        540,
+        40
+      ],
+      "id": "0d6b2c36-0f3c-4a1c-8c11-61d7d0f2a62e",
+      "name": "HTTP – Mark Simulated Sent"
+    },
+    {
+      "parameters": {
+        "url": "={{'https://graph.facebook.com/v19.0/' + $env.WHATSAPP_PHONE_NUMBER_ID + '/messages'}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {
+          "fullResponse": true
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.WHATSAPP_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": ($node[\"HTTP – Lock Message (queued→sending)\"].json[0].to_phone || '').replace(/^\\+/, ''),\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": $node[\"HTTP – Lock Message (queued→sending)\"].json[0].text\n  }\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        540,
+        240
+      ],
+      "id": "d00d81ad-6a0a-45bb-b9f5-4f2b0c5d1e0f",
+      "name": "HTTP – Send WhatsApp Message",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ ($json.statusCode || 0) >= 200 && ($json.statusCode || 0) < 300 }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
+        240
+      ],
+      "id": "1b2b7d9b-2c0d-4f2b-8b4c-0c8b6a4b4e1d",
+      "name": "IF – WhatsApp Send OK?"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages?id=eq.' + $node[\"HTTP – Lock Message (queued→sending)\"].json[0].id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"status\": \"sent\",\n  \"sent_at\": new Date().toISOString(),\n  \"provider_payload\": $node[\"HTTP – Send WhatsApp Message\"].json.body\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1020,
+        160
+      ],
+      "id": "f6b0e5c2-3b4e-4f0b-8c5a-7c0f2b5d1a2e",
+      "name": "HTTP – Mark Sent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ String($node[\"HTTP – Send WhatsApp Message\"].json.body?.error?.message || '').toLowerCase().includes('24') }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        320
+      ],
+      "id": "9a2c1d1e-6e2b-4a1a-9c2b-5e1d0a2b3c4d",
+      "name": "IF – Outside 24h?"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages?id=eq.' + $node[\"HTTP – Lock Message (queued→sending)\"].json[0].id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"status\": \"failed\",\n  \"error\": $node[\"HTTP – Send WhatsApp Message\"].json.body?.error?.message || 'Send failed',\n  \"provider_payload\": $node[\"HTTP – Send WhatsApp Message\"].json.body,\n  \"retry_count\": 999\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1260,
+        280
+      ],
+      "id": "0a1b2c3d-4e5f-6789-0abc-def123456789",
+      "name": "HTTP – Mark Failed (No Retry)"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/wa_messages?id=eq.' + $node[\"HTTP – Lock Message (queued→sending)\"].json[0].id}}",
+        "method": "PATCH",
+        "jsonParameters": true,
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParametersJson": "={\n  \"status\": \"queued\",\n  \"error\": $node[\"HTTP – Send WhatsApp Message\"].json.body?.error?.message || 'Send failed',\n  \"provider_payload\": $node[\"HTTP – Send WhatsApp Message\"].json.body,\n  \"retry_count\": ($node[\"HTTP – Lock Message (queued→sending)\"].json[0].retry_count || 0) + 1\n}",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1260,
+        400
+      ],
+      "id": "2c3d4e5f-6789-0abc-def1-234567890abc",
+      "name": "HTTP – Requeue With Retry"
+    }
+  ],
+  "connections": {
+    "Cron – Every Minute": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Fetch Queued Outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Fetch Queued Outbound": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Lock Message (queued→sending)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Lock Message (queued→sending)": {
+      "main": [
+        [
+          {
+            "node": "IF – Lock Acquired?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Lock Acquired?": {
+      "main": [
+        [
+          {
+            "node": "IF – SAFE_MODE?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF – SAFE_MODE?": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Mark Simulated Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP – Send WhatsApp Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Mark Simulated Sent": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP – Send WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "IF – WhatsApp Send OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – WhatsApp Send OK?": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Mark Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF – Outside 24h?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Mark Sent": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF – Outside 24h?": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Mark Failed (No Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP – Requeue With Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Mark Failed (No Retry)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP – Requeue With Retry": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
