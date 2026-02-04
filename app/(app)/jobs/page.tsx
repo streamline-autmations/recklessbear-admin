@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
-import { JobsTableClient, type JobsListRow } from "./jobs-table-client";
+import { JobsKanbanClient, type JobsListRow } from "./jobs-kanban-client";
 import { RefreshButton } from "../leads/refresh-button";
 import { PageHeader } from "@/components/page-header";
 
@@ -14,6 +14,14 @@ async function getJobsWithCount(): Promise<{ jobs: JobsListRow[]; count: number 
   if (!user) {
     return { jobs: [], count: 0 };
   }
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("user_id, full_name, email");
+
+  const repNameById = new Map<string, string>(
+    (profiles || []).map((p) => [p.user_id as string, (p.full_name as string | null) || (p.email as string) || "—"])
+  );
 
   const { data, error, count } = await supabase
     .from("jobs")
@@ -31,7 +39,11 @@ async function getJobsWithCount(): Promise<{ jobs: JobsListRow[]; count: number 
           lead_id,
           customer_name,
           name,
-          organization
+          organization,
+          phone,
+          product_type,
+          trello_product_list,
+          assigned_rep_id
         )
       `,
       { count: "exact" }
@@ -46,7 +58,23 @@ async function getJobsWithCount(): Promise<{ jobs: JobsListRow[]; count: number 
     return { jobs: [], count: 0 };
   }
 
-  return { jobs: (data || []) as unknown as JobsListRow[], count: count || (data || []).length };
+  const jobs = ((data || []) as unknown as JobsListRow[]).map((job) => {
+    const lead = job.lead?.[0];
+    if (!lead || !("assigned_rep_id" in lead)) return job;
+    const repId = (lead as unknown as { assigned_rep_id?: string | null }).assigned_rep_id || null;
+    const assignedRepName = repId ? repNameById.get(repId) || "—" : null;
+    return {
+      ...job,
+      lead: [
+        {
+          ...(lead as unknown as JobsListRow["lead"][number]),
+          assigned_rep_name: assignedRepName,
+        },
+      ],
+    };
+  });
+
+  return { jobs, count: count || jobs.length };
 }
 
 export default async function JobsPage() {
@@ -56,8 +84,8 @@ export default async function JobsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Jobs"
-        subtitle={`Track production jobs and orders. (${totalCount} active)`}
+        title="Production Pipeline"
+        subtitle={`Track jobs through production at a glance. (${totalCount} active)`}
         actions={<RefreshButton />}
       />
       {jobs.length === 0 ? (
@@ -70,14 +98,7 @@ export default async function JobsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Production Queue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <JobsTableClient jobs={jobs} />
-          </CardContent>
-        </Card>
+        <JobsKanbanClient jobs={jobs} />
       )}
     </div>
   );

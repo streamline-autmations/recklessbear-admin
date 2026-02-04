@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -32,7 +32,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/status-badge";
-import { X, Filter, ChevronRight } from "lucide-react";
+import { X, Filter, ChevronRight, MessageCircle, UserPlus, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { assignRepAction, changeStatusAction } from "./[id]/actions";
 
 import type { Lead } from '@/types/leads';
 
@@ -128,6 +130,7 @@ function buildIntents(lead: DisplayLead): string[] {
 
 export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTableClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [intentFilters, setIntentFilters] = useState<Set<string>>(new Set());
@@ -135,6 +138,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
   const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated");
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [repSelectionByLead, setRepSelectionByLead] = useState<Record<string, string>>({});
 
   // Map rep names to leads
   const leadsWithRepNames = useMemo(() => {
@@ -279,12 +284,22 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
       setStatusFilter("New");
       setIntentFilters(new Set());
       setAssignedRepFilter("all");
+    } else if (preset === "new-week") {
+      setStatusFilter("New");
+      setIntentFilters(new Set());
+      setAssignedRepFilter("all");
     } else if (preset === "needs-follow-up") {
       setStatusFilter("all");
       setIntentFilters(new Set());
       setAssignedRepFilter("all");
     }
   };
+
+  useEffect(() => {
+    const preset = searchParams.get("preset");
+    if (!preset) return;
+    applyPreset(preset);
+  }, [searchParams]);
 
   // Apply needs-follow-up filter
   const filteredWithPresets = useMemo(() => {
@@ -299,6 +314,13 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
       result = result.filter((lead) => {
         const createdDate = new Date(lead.submission_date || lead.created_at || 0).toDateString();
         return createdDate === today && (lead.status || "").toLowerCase() === "new";
+      });
+    } else if (activePreset === "new-week") {
+      const now = new Date().getTime();
+      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+      result = result.filter((lead) => {
+        const createdAt = new Date(lead.submission_date || lead.created_at || 0).getTime();
+        return createdAt >= sevenDaysAgo && (lead.status || "").toLowerCase() === "new";
       });
     } else if (activePreset === "needs-follow-up") {
       const now = new Date().getTime();
@@ -357,6 +379,38 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     } catch {
       return dateString;
     }
+  };
+
+  const openWhatsApp = (phone?: string | null) => {
+    if (!phone) return;
+    const digits = String(phone).replace(/[^+\d]/g, "");
+    window.open(`https://wa.me/${digits}`, "_blank", "noopener,noreferrer");
+  };
+
+  const approveQuote = async (leadDbId: string) => {
+    const fd = new FormData();
+    fd.append("leadId", leadDbId);
+    fd.append("status", "Quote Approved");
+    const res = await changeStatusAction(fd);
+    if (res && "error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Quote approved");
+    router.refresh();
+  };
+
+  const assignRep = async (leadDbId: string, repId: string) => {
+    const fd = new FormData();
+    fd.append("leadId", leadDbId);
+    fd.append("repId", repId);
+    const res = await assignRepAction(fd);
+    if (res && "error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Rep assigned");
+    router.refresh();
   };
 
   // Mobile filters component
@@ -506,6 +560,14 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
           New Today
         </Button>
         <Button
+          variant={activePreset === "new-week" ? "default" : "outline"}
+          size="sm"
+          onClick={() => applyPreset("new-week")}
+          className="min-h-[36px] text-xs sm:text-sm"
+        >
+          New This Week
+        </Button>
+        <Button
           variant={activePreset === "needs-follow-up" ? "default" : "outline"}
           size="sm"
           onClick={() => applyPreset("needs-follow-up")}
@@ -611,8 +673,179 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
         <MobileFilters />
       </div>
 
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-muted-foreground">
+          {filteredWithPresets.length} lead{filteredWithPresets.length !== 1 ? "s" : ""}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={viewMode === "cards" ? "default" : "outline"}
+            size="sm"
+            className="min-h-[36px]"
+            onClick={() => setViewMode("cards")}
+          >
+            Cards
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "table" ? "default" : "outline"}
+            size="sm"
+            className="min-h-[36px]"
+            onClick={() => setViewMode("table")}
+          >
+            Table
+          </Button>
+        </div>
+      </div>
+
+      <div className={viewMode === "cards" ? "hidden md:grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "hidden"}>
+        {filteredWithPresets.length === 0 ? (
+          <Card className="md:col-span-2 xl:col-span-3 2xl:col-span-4">
+            <CardContent className="py-10 text-center text-muted-foreground">
+              {hasActiveFilters || activePreset ? "No leads found matching your filters." : "No leads yet."}
+            </CardContent>
+          </Card>
+        ) : (
+          filteredWithPresets.map((lead) => {
+            const id = String(lead.id || lead.lead_id);
+            const repPick = repSelectionByLead[id] ?? lead.assigned_rep_id ?? "unassigned";
+            const leadHref = `/leads/${lead.lead_id || lead.id}`;
+            return (
+              <Card key={id} className="hover:bg-muted/30 transition-colors">
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-lg font-semibold truncate">{lead.name || lead.customer_name || "—"}</div>
+                      {lead.organization ? (
+                        <div className="text-sm text-muted-foreground truncate">{lead.organization}</div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-muted-foreground font-mono">{lead.lead_id}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge
+                        status={
+                          ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as
+                            | "new"
+                            | "assigned"
+                            | "contacted"
+                            | "quote_sent"
+                            | "quote_approved"
+                            | "in_production"
+                            | "completed"
+                            | "lost"
+                        }
+                      />
+                      <Button asChild variant="ghost" size="sm" className="min-h-[36px]">
+                        <Link href={leadHref}>
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <IntentChips lead={lead} />
+                  </div>
+
+                  <div className="grid gap-2 rounded-lg border p-3 bg-background/50">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="text-muted-foreground">Assigned rep</div>
+                      <div className="font-medium truncate">{lead.assigned_rep_name || "Unassigned"}</div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="text-muted-foreground">Submitted</div>
+                      <div className="font-medium">{formatDate(lead.submission_date || lead.created_at || "")}</div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="text-muted-foreground">Updated</div>
+                      <div className="font-medium">
+                        {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        value={repPick}
+                        onValueChange={(v) => setRepSelectionByLead((prev) => ({ ...prev, [id]: v }))}
+                      >
+                        <SelectTrigger className="min-h-[44px]">
+                          <SelectValue placeholder="Assign rep" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {reps.map((rep) => (
+                            <SelectItem key={rep.id} value={rep.id}>
+                              {rep.name || rep.email || rep.id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-[44px] gap-2"
+                        onClick={() => {
+                          if (!lead.id) {
+                            toast.error("Lead not available");
+                            return;
+                          }
+                          if (repPick === "unassigned") {
+                            toast.error("Pick a rep");
+                            return;
+                          }
+                          void assignRep(String(lead.id), repPick);
+                        }}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Assign
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="default"
+                        className="min-h-[44px] gap-2"
+                        onClick={() => {
+                          if (!lead.id) {
+                            toast.error("Lead not available");
+                            return;
+                          }
+                          void approveQuote(String(lead.id));
+                        }}
+                        disabled={(lead.status || "").toLowerCase() === "quote approved"}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve quote
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-[44px] gap-2"
+                        onClick={() => openWhatsApp(lead.phone)}
+                        disabled={!lead.phone}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        WhatsApp
+                      </Button>
+                    </div>
+
+                    <Button asChild variant="outline" className="min-h-[44px]">
+                      <Link href={leadHref}>View details</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto -mx-4 md:mx-0">
+      <div className={viewMode === "table" ? "hidden md:block overflow-x-auto -mx-4 md:mx-0" : "hidden"}>
         <div className="inline-block min-w-full align-middle">
           <Table>
             <TableHeader>
