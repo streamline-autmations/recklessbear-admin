@@ -12,17 +12,6 @@ function getAdminSupabase() {
   return createAdminClient(url, key, { auth: { persistSession: false } });
 }
 
-function normalizePhone(input: string): string {
-  const trimmed = String(input || "").trim();
-  if (!trimmed) return "";
-  if (trimmed.startsWith("+")) return `+${trimmed.slice(1).replace(/\D/g, "")}`;
-  const digits = trimmed.replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("27") && digits.length >= 11) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length === 10) return `+27${digits.slice(1)}`;
-  return `+${digits}`;
-}
-
 export async function getConversations(): Promise<WhatsAppConversation[]> {
   const supabase = await createClient();
 
@@ -127,7 +116,7 @@ export async function updateCustomDisplayNameAction(conversationId: string, cust
   return { success: true, custom_display_name: value } as const;
 }
 
-export async function sendMessageAction(conversationId: string, text: string) {
+export async function sendMessageAction(conversationId: string, text: string, clientTempId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -135,71 +124,71 @@ export async function sendMessageAction(conversationId: string, text: string) {
 
   if (!user) return { error: "Not authenticated" };
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, user_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (profileError || !profile?.role) return { error: "Profile not found" };
-
-  const role = profile.role as string;
-
-  const admin = getAdminSupabase();
-  if (!admin) return { error: "Supabase admin not configured" };
-
-  const { data: conversation, error: convError } = await admin
-    .from("wa_conversations")
-    .select("id, phone, lead_id")
-    .eq("id", conversationId)
-    .single();
-
-  if (convError || !conversation) return { error: "Conversation not found" };
-
-  const targetPhone = normalizePhone(conversation.phone);
-  if (!targetPhone) return { error: "Invalid conversation phone" };
-
-  const { data: ceoProfiles } = await admin.from("profiles").select("phone").eq("role", "ceo");
-  const ceoPhones = ((ceoProfiles || []) as Array<{ phone: string | null }>)
-    .map((p) => normalizePhone(p.phone || ""))
-    .filter(Boolean);
-
-  if (ceoPhones.includes(targetPhone)) return { error: "Blocked recipient" };
-
-  if (role === "rep") {
-    if (!conversation.lead_id) return { error: "Unauthorized" };
-
-    const { data: lead, error: leadError } = await admin
-      .from("leads")
-      .select("assigned_rep_id")
-      .eq("id", conversation.lead_id)
-      .single();
-
-    if (leadError || !lead) return { error: "Unauthorized" };
-    const assignedRepId = (lead as { assigned_rep_id: string | null }).assigned_rep_id;
-    if (assignedRepId !== user.id) return { error: "Unauthorized" };
-  }
-
   const nowIso = new Date().toISOString();
   const preview = text.slice(0, 140);
 
-  const { error: insertError } = await admin.from("wa_messages").insert({
+  const webhookUrl =
+    process.env.WHATSAPP_SEND_WEBHOOK_URL ||
+    process.env.NEXT_PUBLIC_WHATSAPP_SEND_WEBHOOK_URL ||
+    "https://dockerfile-1n82.onrender.com/webhook/wa/send";
+
+  const finalClientTempId = String(clientTempId || "").trim() || `tmp_${Date.now()}`;
+
+  const getStringField = (value: unknown, field: string) => {
+    if (!value || typeof value !== "object") return null;
+    const record = value as Record<string, unknown>;
+    const v = record[field];
+    return typeof v === "string" ? v : null;
+  };
+
+  let webhookJson: unknown = null;
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        text,
+        message_type: "text",
+        created_by: user.id,
+        client_temp_id: finalClientTempId,
+      }),
+    });
+
+    const contentType = res.headers.get("content-type") || "";
+    webhookJson = contentType.includes("application/json") ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      const msg =
+        getStringField(webhookJson, "message") ||
+        getStringField(webhookJson, "error") ||
+        `Webhook request failed (${res.status})`;
+      return { error: msg };
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to call webhook";
+    return { error: msg };
+  }
+
+  const { error: insertError } = await supabase.from("wa_messages").insert({
     conversation_id: conversationId,
     direction: "outbound",
     text,
     status: "queued",
     created_at: nowIso,
     created_by: user.id,
-    to_phone: targetPhone,
     retry_count: 0,
   });
 
   if (insertError) return { error: insertError.message || "Failed to queue message" };
 
-  await admin
-    .from("wa_conversations")
-    .update({ last_message_at: nowIso, last_message_preview: preview, updated_at: nowIso })
-    .eq("id", conversationId);
+  const admin = getAdminSupabase();
+  if (admin) {
+    await admin
+      .from("wa_conversations")
+      .update({ last_message_at: nowIso, last_message_preview: preview, updated_at: nowIso })
+      .eq("id", conversationId);
+  }
 
   revalidatePath("/inbox");
   return { success: true };

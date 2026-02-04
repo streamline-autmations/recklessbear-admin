@@ -6,6 +6,7 @@ export interface WhatsAppConversation {
   lead_id: string | null;
   assigned_rep_id: string | null;
   last_message_at: string;
+  last_message_preview?: string | null;
   unread_count: number;
   lead?: {
     id: string;

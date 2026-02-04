@@ -62,6 +62,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
       c.phone.toLowerCase().includes(term) ||
       (c.display_name || "").toLowerCase().includes(term) ||
       (c.custom_display_name || "").toLowerCase().includes(term) ||
+      (c.last_message_preview || "").toLowerCase().includes(term) ||
       (c.lead?.name || "").toLowerCase().includes(term) ||
       (c.lead?.organization || "").toLowerCase().includes(term)
     );
@@ -71,7 +72,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     e.preventDefault();
     if (!selectedId || !newMessage.trim()) return;
 
-    const tempId = Math.random().toString();
+    const tempId = `tmp_${Date.now()}`;
     const tempMessage: WhatsAppMessage = {
       id: tempId,
       conversation_id: selectedId,
@@ -87,10 +88,10 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     setNewMessage("");
     setIsSending(true);
 
-    const result = await sendMessageAction(selectedId, tempMessage.text);
+    const result = await sendMessageAction(selectedId, tempMessage.text, tempId);
 
     if (result && "error" in result) {
-      toast.error("Failed to send message");
+      toast.error(result.error || "Failed to send message");
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } else {
       toast.success("Message sent");
@@ -216,7 +217,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </div>
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground truncate w-full pr-2">
-                    {conv.lead?.organization || conv.phone}
+                    {conv.last_message_preview || conv.lead?.organization || conv.phone}
                   </div>
                   {conv.unread_count > 0 && (
                     <Badge
