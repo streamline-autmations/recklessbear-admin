@@ -70,6 +70,24 @@ export async function updateCustomDisplayNameAction(conversationId: string, cust
 
   const role = profile.role as string;
 
+  const normalized = String(customDisplayName ?? "").trim();
+  const value = normalized ? normalized : null;
+  const nowIso = new Date().toISOString();
+
+  if (role === "admin" || role === "ceo") {
+    const { error: updateError } = await supabase
+      .from("wa_conversations")
+      .update({ custom_display_name: value, updated_at: nowIso })
+      .eq("id", conversationId);
+
+    if (updateError) return { error: updateError.message || "Failed to update custom display name" } as const;
+
+    revalidatePath("/inbox");
+    return { success: true, custom_display_name: value } as const;
+  }
+
+  if (role !== "rep") return { error: "Unauthorized" } as const;
+
   const admin = getAdminSupabase();
   if (!admin) return { error: "Supabase admin not configured" } as const;
 
@@ -81,29 +99,21 @@ export async function updateCustomDisplayNameAction(conversationId: string, cust
 
   if (convError || !conversation) return { error: "Conversation not found" } as const;
 
-  if (role === "rep") {
-    const assignedRepId = (conversation as { assigned_rep_id: string | null }).assigned_rep_id;
-    if (assignedRepId !== user.id) {
-      const leadId = (conversation as { lead_id: string | null }).lead_id;
-      if (!leadId) return { error: "Unauthorized" } as const;
+  const assignedRepId = (conversation as { assigned_rep_id: string | null }).assigned_rep_id;
+  if (assignedRepId !== user.id) {
+    const leadId = (conversation as { lead_id: string | null }).lead_id;
+    if (!leadId) return { error: "Unauthorized" } as const;
 
-      const { data: lead, error: leadError } = await admin
-        .from("leads")
-        .select("assigned_rep_id")
-        .eq("id", leadId)
-        .single();
+    const { data: lead, error: leadError } = await admin
+      .from("leads")
+      .select("assigned_rep_id")
+      .eq("id", leadId)
+      .single();
 
-      if (leadError || !lead) return { error: "Unauthorized" } as const;
-      const leadAssignedRepId = (lead as { assigned_rep_id: string | null }).assigned_rep_id;
-      if (leadAssignedRepId !== user.id) return { error: "Unauthorized" } as const;
-    }
-  } else if (role !== "admin" && role !== "ceo") {
-    return { error: "Unauthorized" } as const;
+    if (leadError || !lead) return { error: "Unauthorized" } as const;
+    const leadAssignedRepId = (lead as { assigned_rep_id: string | null }).assigned_rep_id;
+    if (leadAssignedRepId !== user.id) return { error: "Unauthorized" } as const;
   }
-
-  const normalized = String(customDisplayName ?? "").trim();
-  const value = normalized ? normalized : null;
-  const nowIso = new Date().toISOString();
 
   const { error: updateError } = await admin
     .from("wa_conversations")
@@ -155,8 +165,17 @@ export async function sendMessageAction(conversationId: string, text: string, cl
       }),
     });
 
-    const contentType = res.headers.get("content-type") || "";
-    webhookJson = contentType.includes("application/json") ? await res.json() : await res.text();
+    const rawBody = await res.text();
+    const trimmed = rawBody.trim();
+    if (!trimmed) {
+      webhookJson = null;
+    } else {
+      try {
+        webhookJson = JSON.parse(trimmed) as unknown;
+      } catch {
+        webhookJson = rawBody;
+      }
+    }
 
     if (!res.ok) {
       const msg =

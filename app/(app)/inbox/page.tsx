@@ -12,7 +12,7 @@ export default async function InboxPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Inbox" subtitle="WhatsApp integration (Beta)" />
+      <PageHeader title="Inbox" subtitle="WhatsApp integration" />
       <InboxClient initialConversations={conversations} />
     </div>
   );

@@ -107,8 +107,27 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     return new Date(dateStr).toLocaleDateString();
   };
 
+  const getPhoneDigits = (phone: string) => {
+    return String(phone || "").replace(/\D/g, "");
+  };
+
+  const formatPhoneForDisplay = (phone: string) => {
+    const digits = getPhoneDigits(phone);
+    if (digits.startsWith("27") && digits.length === 11) {
+      const rest = digits.slice(2);
+      return `+27 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`;
+    }
+    if (String(phone || "").trim().startsWith("+") && digits) return `+${digits}`;
+    return String(phone || "").trim();
+  };
+
+  const getWhatsAppLink = (phone: string) => {
+    const digits = getPhoneDigits(phone);
+    return digits ? `https://wa.me/${digits}` : null;
+  };
+
   const getConversationBaseTitle = (conv: WhatsAppConversation) => {
-    return conv.lead?.name || conv.display_name || conv.phone;
+    return conv.lead?.name || conv.display_name || formatPhoneForDisplay(conv.phone);
   };
 
   const getConversationTitle = (conv: WhatsAppConversation) => {
@@ -217,7 +236,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </div>
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground truncate w-full pr-2">
-                    {conv.last_message_preview || conv.lead?.organization || conv.phone}
+                    {conv.last_message_preview || conv.lead?.organization || formatPhoneForDisplay(conv.phone)}
                   </div>
                   {conv.unread_count > 0 && (
                     <Badge
@@ -262,7 +281,17 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {selectedConversation.phone}
+                    {(() => {
+                      const href = getWhatsAppLink(selectedConversation.phone);
+                      const label = formatPhoneForDisplay(selectedConversation.phone);
+                      return href ? (
+                        <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                          {label}
+                        </a>
+                      ) : (
+                        label
+                      );
+                    })()}
                     {selectedConversation.lead?.organization ? ` • ${selectedConversation.lead.organization}` : ""}
                   </div>
                 </div>
