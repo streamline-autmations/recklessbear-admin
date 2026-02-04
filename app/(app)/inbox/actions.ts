@@ -63,6 +63,70 @@ export async function getMessages(conversationId: string): Promise<WhatsAppMessa
   return data as WhatsAppMessage[];
 }
 
+export async function updateCustomDisplayNameAction(conversationId: string, customDisplayName: string | null) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" } as const;
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role, user_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profileError || !profile?.role) return { error: "Profile not found" } as const;
+
+  const role = profile.role as string;
+
+  const admin = getAdminSupabase();
+  if (!admin) return { error: "Supabase admin not configured" } as const;
+
+  const { data: conversation, error: convError } = await admin
+    .from("wa_conversations")
+    .select("id, lead_id, assigned_rep_id")
+    .eq("id", conversationId)
+    .single();
+
+  if (convError || !conversation) return { error: "Conversation not found" } as const;
+
+  if (role === "rep") {
+    const assignedRepId = (conversation as { assigned_rep_id: string | null }).assigned_rep_id;
+    if (assignedRepId !== user.id) {
+      const leadId = (conversation as { lead_id: string | null }).lead_id;
+      if (!leadId) return { error: "Unauthorized" } as const;
+
+      const { data: lead, error: leadError } = await admin
+        .from("leads")
+        .select("assigned_rep_id")
+        .eq("id", leadId)
+        .single();
+
+      if (leadError || !lead) return { error: "Unauthorized" } as const;
+      const leadAssignedRepId = (lead as { assigned_rep_id: string | null }).assigned_rep_id;
+      if (leadAssignedRepId !== user.id) return { error: "Unauthorized" } as const;
+    }
+  } else if (role !== "admin" && role !== "ceo") {
+    return { error: "Unauthorized" } as const;
+  }
+
+  const normalized = String(customDisplayName ?? "").trim();
+  const value = normalized ? normalized : null;
+  const nowIso = new Date().toISOString();
+
+  const { error: updateError } = await admin
+    .from("wa_conversations")
+    .update({ custom_display_name: value, updated_at: nowIso })
+    .eq("id", conversationId);
+
+  if (updateError) return { error: updateError.message || "Failed to update custom display name" } as const;
+
+  revalidatePath("/inbox");
+  return { success: true, custom_display_name: value } as const;
+}
+
 export async function sendMessageAction(conversationId: string, text: string) {
   const supabase = await createClient();
   const {

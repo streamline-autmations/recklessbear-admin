@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { WhatsAppConversation, WhatsAppMessage } from "@/types/inbox";
-import { getMessages, sendMessageAction } from "./actions";
+import { getMessages, sendMessageAction, updateCustomDisplayNameAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Send, ArrowLeft, Phone, User } from "lucide-react";
+import { Search, Send, ArrowLeft, Phone, User, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 interface InboxClientProps {
@@ -16,7 +17,7 @@ interface InboxClientProps {
 }
 
 export default function InboxClient({ initialConversations }: InboxClientProps) {
-  const [conversations] = useState<WhatsAppConversation[]>(initialConversations);
+  const [conversations, setConversations] = useState<WhatsAppConversation[]>(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -24,6 +25,9 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
+  const [customNameDraft, setCustomNameDraft] = useState("");
+  const [isSavingCustomName, setIsSavingCustomName] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +60,8 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     const term = searchQuery.toLowerCase();
     return (
       c.phone.toLowerCase().includes(term) ||
+      (c.display_name || "").toLowerCase().includes(term) ||
+      (c.custom_display_name || "").toLowerCase().includes(term) ||
       (c.lead?.name || "").toLowerCase().includes(term) ||
       (c.lead?.organization || "").toLowerCase().includes(term)
     );
@@ -100,6 +106,71 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     return new Date(dateStr).toLocaleDateString();
   };
 
+  const getConversationBaseTitle = (conv: WhatsAppConversation) => {
+    return conv.lead?.name || conv.display_name || conv.phone;
+  };
+
+  const getConversationTitle = (conv: WhatsAppConversation) => {
+    const base = getConversationBaseTitle(conv);
+    const custom = String(conv.custom_display_name || "").trim();
+    return custom ? `${base} (${custom})` : base;
+  };
+
+  const getInitials = (value: string) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "U";
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    const a = parts[0]?.[0] || "";
+    const b = parts.length > 1 ? parts[1]?.[0] || "" : parts[0]?.[1] || "";
+    return `${a}${b}`.toUpperCase() || "U";
+  };
+
+  const openEditName = () => {
+    if (!selectedConversation) return;
+    setCustomNameDraft(selectedConversation.custom_display_name || "");
+    setIsEditNameOpen(true);
+  };
+
+  const saveCustomName = async () => {
+    if (!selectedConversation) return;
+    setIsSavingCustomName(true);
+    const result = await updateCustomDisplayNameAction(selectedConversation.id, customNameDraft);
+    if (result && "error" in result) {
+      toast.error(result.error || "Failed to update name");
+      setIsSavingCustomName(false);
+      return;
+    }
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedConversation.id
+          ? { ...c, custom_display_name: (result as { custom_display_name: string | null }).custom_display_name }
+          : c
+      )
+    );
+    toast.success("Name updated");
+    setIsSavingCustomName(false);
+    setIsEditNameOpen(false);
+  };
+
+  const clearCustomName = async () => {
+    if (!selectedConversation) return;
+    setIsSavingCustomName(true);
+    const result = await updateCustomDisplayNameAction(selectedConversation.id, null);
+    if (result && "error" in result) {
+      toast.error(result.error || "Failed to clear name");
+      setIsSavingCustomName(false);
+      return;
+    }
+
+    setConversations((prev) =>
+      prev.map((c) => (c.id === selectedConversation.id ? { ...c, custom_display_name: null } : c))
+    );
+    toast.success("Custom name cleared");
+    setIsSavingCustomName(false);
+    setIsEditNameOpen(false);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -138,7 +209,7 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <div className="font-semibold truncate pr-2">{conv.lead?.name || conv.phone}</div>
+                  <div className="font-semibold truncate pr-2">{getConversationTitle(conv)}</div>
                   <div className="text-xs text-muted-foreground whitespace-nowrap">
                     {formatDate(conv.last_message_at)}
                   </div>
@@ -177,12 +248,12 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </Button>
                 <Avatar>
                   <AvatarFallback>
-                    {selectedConversation.lead?.name?.substring(0, 2).toUpperCase() || "U"}
+                    {getInitials(getConversationBaseTitle(selectedConversation))}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="font-semibold flex items-center gap-2">
-                    {selectedConversation.lead?.name || selectedConversation.phone}
+                    {getConversationTitle(selectedConversation)}
                     {selectedConversation.lead && (
                       <Badge variant="outline" className="text-[10px] h-5">
                         Lead
@@ -201,6 +272,9 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </Button>
                 <Button variant="ghost" size="icon">
                   <User className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={openEditName}>
+                  <Pencil className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -283,6 +357,46 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
           </div>
         )}
       </div>
+
+      <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit custom display name</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Custom name</div>
+            <Input
+              value={customNameDraft}
+              onChange={(e) => setCustomNameDraft(e.target.value)}
+              placeholder="Type a custom name…"
+            />
+            {selectedConversation && (
+              <div className="text-xs text-muted-foreground">
+                Shows as: {getConversationBaseTitle(selectedConversation)}{" "}
+                {customNameDraft.trim() ? `(${customNameDraft.trim()})` : ""}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button type="button" variant="outline" onClick={clearCustomName} disabled={isSavingCustomName}>
+              Clear
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditNameOpen(false)}
+                disabled={isSavingCustomName}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveCustomName} disabled={isSavingCustomName}>
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
