@@ -2,16 +2,18 @@ import { InventoryTableClient } from "./inventory-table-client";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, AlertTriangle, ArrowRightLeft } from "lucide-react";
-import type { Material, StockMovement } from "@/types/stock";
-import { Badge } from "@/components/ui/badge";
+import type { MaterialInventory, StockMovement, StockTransaction, StockTransactionLineItem } from "@/types/stock";
 import { PageHeader } from "@/components/page-header";
+import { StockTestHelperClient } from "./test-helper-client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MovementsLogClient } from "./movements-log-client";
 
 export const dynamic = "force-dynamic";
 
-async function getMaterials(): Promise<Material[]> {
+async function getMaterials(): Promise<MaterialInventory[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("materials")
+    .from("materials_inventory")
     .select("*")
     .order("name");
 
@@ -20,50 +22,108 @@ async function getMaterials(): Promise<Material[]> {
     return [];
   }
 
-  // Transform to include computed fields and legacy aliases
-  return (data || []).map((m) => ({
-    ...m,
-    is_low_stock: m.quantity_in_stock <= m.minimum_stock_level,
-    needs_restock: m.quantity_in_stock <= m.restock_threshold,
-    // Legacy aliases for backward compatibility with existing components
-    qty_on_hand: m.quantity_in_stock,
-    minimum_level: m.minimum_stock_level,
-    low_stock: m.quantity_in_stock <= m.minimum_stock_level,
-  }));
+  return data || [];
 }
 
-async function getRecentMovements(): Promise<(StockMovement & { material: { name: string; unit: string } | null })[]> {
+async function getRecentTransactions(): Promise<
+  Array<
+    StockTransaction & {
+      line_items: Array<
+        StockTransactionLineItem & {
+          material?: { name: string; unit: string } | null;
+        }
+      >;
+    }
+  >
+> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("stock_movements")
-    .select(`
-      *,
-      material:materials(name, unit)
-    `)
+    .from("stock_transactions")
+    .select(
+      `
+      id,
+      type,
+      reference,
+      reference_id,
+      notes,
+      created_at,
+      line_items:stock_transaction_line_items(
+        id,
+        transaction_id,
+        material_id,
+        delta_qty,
+        material:materials_inventory(name, unit)
+      )
+    `
+    )
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
 
   if (error) {
-    console.error("Error fetching movements:", error);
+    console.error("Error fetching transactions:", error);
     return [];
   }
 
-  // Transform to include legacy aliases
-  return (data || []).map((mov) => ({
-    ...mov,
-    delta_qty: mov.quantity_change,
-    type: mov.movement_type,
+  type RawTransaction = StockTransaction & {
+    reference_id: string | null;
+    line_items: Array<
+      StockTransactionLineItem & {
+        material?: { name: string; unit: string } | null;
+      }
+    >;
+  };
+
+  const normalized: Array<StockTransaction & { line_items: RawTransaction["line_items"] }> = ((data || []) as unknown as RawTransaction[]).map((t) => ({
+    ...t,
+    reference: t.reference ?? t.reference_id ?? null,
   }));
+
+  return normalized;
+}
+
+async function getConsumedThisMonth(): Promise<Array<Pick<StockMovement, "material_id" | "delta_qty">>> {
+  const supabase = await createClient();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const { data, error } = await supabase
+    .from("stock_movements")
+    .select("material_id, delta_qty")
+    .eq("type", "consumed")
+    .gte("created_at", monthStart.toISOString());
+
+  if (error) {
+    console.error("Error fetching monthly consumption:", error);
+    return [];
+  }
+
+  return (data || []) as Array<Pick<StockMovement, "material_id" | "delta_qty">>;
 }
 
 export default async function StockPage() {
-  const [materials, movements] = await Promise.all([
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return (
+      <div className="p-8 text-center">
+        <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
+        <p className="text-muted-foreground mt-2">Please sign in to view stock.</p>
+      </div>
+    );
+  }
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", user.id).single();
+  const isAdmin = !!profile && (profile.role === "ceo" || profile.role === "admin");
+
+  const [materials, transactions, consumedThisMonth] = await Promise.all([
     getMaterials(),
-    getRecentMovements()
+    getRecentTransactions(),
+    getConsumedThisMonth(),
   ]);
+  const showTestHelpers = process.env.NEXT_PUBLIC_ENABLE_TEST_HELPERS === "true";
   
-  const lowStockCount = materials.filter(m => m.is_low_stock).length;
-  const needsRestockCount = materials.filter(m => m.needs_restock).length;
+  const lowStockCount = materials.filter((m) => m.qty_on_hand <= m.minimum_level).length;
+  const needsRestockCount = materials.filter((m) => m.qty_on_hand <= m.restock_threshold).length;
 
   return (
     <div className="space-y-6">
@@ -113,63 +173,58 @@ export default async function StockPage() {
             <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{movements.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Last 50 transactions</p>
+            <div className="text-2xl font-bold">{transactions.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">Last 100 transactions</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <Tabs defaultValue="inventory" className="w-full">
+        <div className="flex items-center justify-between gap-3">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="inventory">Inventory</TabsTrigger>
+            <TabsTrigger value="movements">Movements</TabsTrigger>
+            {isAdmin && <TabsTrigger value="bom">Recipes / BOM</TabsTrigger>}
+          </TabsList>
+        </div>
+
+        <TabsContent value="inventory">
           <Card>
             <CardHeader>
               <CardTitle>Inventory</CardTitle>
             </CardHeader>
             <CardContent>
-              <InventoryTableClient materials={materials} />
+              <InventoryTableClient materials={materials} isAdmin={isAdmin} consumedThisMonth={consumedThisMonth} />
             </CardContent>
           </Card>
-        </div>
-        
-        <div>
-          <Card className="h-full">
+        </TabsContent>
+
+        <TabsContent value="movements">
+          <Card>
             <CardHeader>
               <CardTitle>Stock Log</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                {movements.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No movements recorded</p>
-                ) : (
-                  movements.map((mov) => (
-                    <div key={mov.id} className="flex items-start justify-between border-b pb-3 last:border-0 last:pb-0">
-                      <div>
-                        <p className="font-medium text-sm">{mov.material?.name || mov.material_name || "Unknown Material"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(mov.created_at).toLocaleDateString()} {new Date(mov.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </p>
-                        {mov.order_name && (
-                          <p className="text-xs text-muted-foreground">Order: {mov.order_name}</p>
-                        )}
-                        {mov.notes && <p className="text-xs text-muted-foreground mt-1 italic">&quot;{mov.notes}&quot;</p>}
-                      </div>
-                      <div className="text-right">
-                        <Badge 
-                          variant={mov.movement_type === 'restocked' ? 'outline' : mov.movement_type === 'consumed' ? 'secondary' : 'default'} 
-                          className={mov.movement_type === 'restocked' ? 'text-green-600 border-green-200' : mov.movement_type === 'consumed' ? 'text-red-600' : ''}
-                        >
-                          {mov.quantity_change > 0 ? '+' : ''}{mov.quantity_change} {mov.material?.unit || 'units'}
-                        </Badge>
-                        <p className="text-[10px] text-muted-foreground mt-1 capitalize">{mov.movement_type}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <MovementsLogClient transactions={transactions} />
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="bom">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recipes / BOM</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Open the Recipes/BOM page to manage usage rules.</p>
+              <a href="/stock/bom" className="text-sm font-medium underline underline-offset-4">
+                Go to BOM
+              </a>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      {showTestHelpers && <StockTestHelperClient />}
     </div>
   );
 }
