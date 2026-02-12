@@ -52,3 +52,27 @@ export interface StockTransactionLineItem {
   delta_qty: number;
   material?: { name: string; unit: string } | null;
 }
+
+export const PRODUCTION_STAGES = [
+  "orders_awaiting_confirmation",
+  "no_invoice_number",
+  "orders",
+  "supplier_orders",
+  "layouts_busy_colline",
+  "layouts_busy_elzana",
+  "awaiting_color_match",
+  "layouts_done_awaiting_approval",
+  "layouts_received",
+  "printing",
+  "pressing",
+  "cmt",
+  "cleaning_packing",
+  "completed",
+  "full_payment_before_collection",
+  "full_payment_before_delivery",
+  "ready_for_delivery_collection",
+  "out_for_delivery",
+  "delivered_collected",
+] as const;
+
+export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
