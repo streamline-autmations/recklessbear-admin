@@ -70,6 +70,8 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     const term = searchQuery.toLowerCase();
     return (
       c.phone.toLowerCase().includes(term) ||
+      (c.custom_display_name || "").toLowerCase().includes(term) ||
+      (c.display_name || "").toLowerCase().includes(term) ||
       (c.lead?.name || "").toLowerCase().includes(term) ||
       (c.lead?.organization || "").toLowerCase().includes(term)
     );
@@ -176,6 +178,10 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
             <div className="p-8 text-center text-[#667781]">No chats yet</div>
           ) : (
             filteredConversations.map((conv) => (
+              (() => {
+                const displayName = conv.custom_display_name || conv.display_name || conv.lead?.name || conv.phone;
+                const preview = conv.last_message_preview || conv.lead?.organization || "";
+                return (
               <div
                 key={conv.id}
                 onClick={() => setSelectedId(conv.id)}
@@ -186,14 +192,14 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 }`}
               >
                 <div className="flex justify-between items-start gap-3">
-                  <div className="font-semibold truncate">{conv.lead?.name || conv.phone}</div>
+                  <div className="font-semibold truncate">{displayName}</div>
                   <div className="text-xs text-[#667781] whitespace-nowrap">
                     {formatDate(conv.last_message_at)}
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-3 mt-0.5">
                   <div className="text-sm text-[#667781] truncate w-full">
-                    {conv.lead?.organization || conv.phone}
+                    {preview || conv.phone}
                   </div>
                   {conv.unread_count > 0 && (
                     <Badge
@@ -205,6 +211,8 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                   )}
                 </div>
               </div>
+                );
+              })()
             ))
           )}
         </div>
@@ -213,6 +221,13 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
       <div className={`flex-1 flex flex-col ${!showChatOnMobile ? "hidden md:flex" : "flex"}`}>
         {selectedConversation ? (
           <>
+            {(() => {
+              const displayName =
+                selectedConversation.custom_display_name ||
+                selectedConversation.display_name ||
+                selectedConversation.lead?.name ||
+                selectedConversation.phone;
+              return (
             <div className="px-4 py-3 border-b border-[#d1d7db] flex items-center justify-between bg-[#f0f2f5]">
               <div className="flex items-center gap-3">
                 <Button
@@ -225,12 +240,12 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </Button>
                 <Avatar>
                   <AvatarFallback>
-                    {selectedConversation.lead?.name?.substring(0, 2).toUpperCase() || "U"}
+                    {displayName.substring(0, 2).toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="font-semibold flex items-center gap-2">
-                    {selectedConversation.lead?.name || selectedConversation.phone}
+                    {displayName}
                     {selectedConversation.lead && (
                       <Badge variant="outline" className="text-[10px] h-5 border-[#d1d7db] text-[#54656f]">
                         Lead
@@ -252,6 +267,8 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </Button>
               </div>
             </div>
+              );
+            })()}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 rb-wa-chat-bg">
               {isLoadingMessages ? (

@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LayoutGrid, List, X } from "lucide-react";
 import { toast } from "sonner";
 
 import type { Lead } from '@/types/leads';
@@ -183,6 +184,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
   const [isAssignPending, startAssignTransition] = useTransition();
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const realtimeRefreshTimerRef = useRef<number | null>(null);
 
   // Map rep names to leads
@@ -228,6 +230,22 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
       supabase.removeChannel(channel);
     };
   }, [router]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("rb-admin.leadsView");
+      if (stored === "table") setViewMode("table");
+      if (stored === "cards") setViewMode("cards");
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("rb-admin.leadsView", viewMode);
+    } catch {
+    }
+  }, [viewMode]);
 
   // Get unique values for filters
   const statuses = useMemo(() => {
@@ -506,17 +524,37 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   return (
     <div className="space-y-4">
       <FocusTabs />
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-[44px]"
-          onClick={() => setAdvancedOpen((v) => !v)}
-        >
-          Advanced Filters
-        </Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-[44px]"
+            onClick={() => setAdvancedOpen((v) => !v)}
+          >
+            Advanced Filters
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "cards" ? "default" : "outline"}
+            className="min-h-[44px] gap-2"
+            onClick={() => setViewMode("cards")}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Card View
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "table" ? "default" : "outline"}
+            className="min-h-[44px] gap-2"
+            onClick={() => setViewMode("table")}
+          >
+            <List className="h-4 w-4" />
+            Table View
+          </Button>
+        </div>
         {hasActiveFilters && (
-          <Button type="button" variant="ghost" className="min-h-[44px] gap-2" onClick={clearFilters}>
+          <Button type="button" variant="ghost" className="min-h-[44px] gap-2 justify-start" onClick={clearFilters}>
             <X className="h-4 w-4" />
             Clear
           </Button>
@@ -616,9 +654,62 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
             </CardContent>
           </Card>
         ) : (
-          focusFilteredLeads.map((lead) => (
-            <LeadCardRow key={lead.id || lead.lead_id} lead={lead} />
-          ))
+          <>
+            {viewMode === "cards" ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {focusFilteredLeads.map((lead) => (
+                  <LeadCardRow key={lead.id || lead.lead_id} lead={lead} />
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Lead</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Next</TableHead>
+                        <TableHead>Rep</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {focusFilteredLeads.map((lead) => {
+                        const nextAction = getNextActionLabel(lead);
+                        const repName = lead.assigned_rep_name || getRepName(lead, reps) || "—";
+                        const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
+                        return (
+                          <TableRow key={lead.id || lead.lead_id}>
+                            <TableCell className="font-medium">
+                              <div className="max-w-[260px] truncate">{lead.name || lead.customer_name || "—"}</div>
+                              <div className="text-xs text-muted-foreground max-w-[260px] truncate">{lead.email || lead.phone || ""}</div>
+                            </TableCell>
+                            <TableCell className="max-w-[240px] truncate">{companyLabel}</TableCell>
+                            <TableCell>
+                              <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
+                                {nextAction}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-[180px] truncate">{repName}</TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">
+                              {formatDate(lead.submission_date || lead.created_at || "")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button asChild className="min-h-[36px]" size="sm">
+                                <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </div>

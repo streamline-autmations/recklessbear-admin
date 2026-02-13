@@ -130,6 +130,63 @@ export function LeadDetailClient({
   const [tabOrder, setTabOrder] = useState<LeadDetailTabValue[]>(defaultTabOrder);
   const [arrangeTabsOpen, setArrangeTabsOpen] = useState(false);
 
+  const hasQuoteData = useMemo(() => {
+    const hasKeys =
+      !!lead.quote_data && typeof lead.quote_data === "object" && Object.keys(lead.quote_data).length > 0;
+
+    const hasNonEmpty = (v: unknown) => {
+      if (v === null || v === undefined) return false;
+      if (typeof v === "string") return v.trim().length > 0;
+      if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "number") return true;
+      if (typeof v === "boolean") return true;
+      return true;
+    };
+
+    return (
+      !!lead.has_requested_quote ||
+      hasKeys ||
+      hasNonEmpty(lead.apparel_interest) ||
+      hasNonEmpty(lead.selected_apparel_items) ||
+      hasNonEmpty(lead.warmup_kit) ||
+      hasNonEmpty(lead.quantity_value) ||
+      hasNonEmpty(lead.quantity_rough) ||
+      hasNonEmpty(lead.has_deadline) ||
+      hasNonEmpty(lead.preferred_deadline_date) ||
+      hasNonEmpty(lead.category) ||
+      hasNonEmpty(lead.product_type) ||
+      hasNonEmpty(lead.trello_product_list) ||
+      hasNonEmpty(lead.attachments) ||
+      hasNonEmpty(lead.message) ||
+      hasNonEmpty(lead.design_notes) ||
+      hasNonEmpty(lead.delivery_date)
+    );
+  }, [lead]);
+
+  const hasBookingData = useMemo(() => {
+    const hasKeys =
+      !!lead.booking_data && typeof lead.booking_data === "object" && Object.keys(lead.booking_data).length > 0;
+    return !!lead.has_booked_call || !!lead.booking_time || !!lead.booking_approved || !!lead.pre_call_notes || hasKeys;
+  }, [lead]);
+
+  const hasQuestionData = useMemo(() => {
+    const hasKeys =
+      !!lead.question_data && typeof lead.question_data === "object" && Object.keys(lead.question_data).length > 0;
+    return !!lead.has_asked_question || !!lead.question || hasKeys;
+  }, [lead]);
+
+  const visibleTabs = useMemo(() => {
+    return leadDetailTabs.filter((tab) => {
+      if (tab.value === "overview") return true;
+      if (tab.value === "timeline") return true;
+      if (tab.value === "notes") return true;
+      if (tab.value === "quote") return hasQuoteData;
+      if (tab.value === "booking") return hasBookingData;
+      if (tab.value === "question") return hasQuestionData;
+      return true;
+    });
+  }, [hasBookingData, hasQuestionData, hasQuoteData]);
+
   useEffect(() => {
     if (!mobileDetailsOpen) {
       setActiveTab("overview");
@@ -162,12 +219,13 @@ export function LeadDetailClient({
   }, [tabOrder]);
 
   const orderedTabs = useMemo(() => {
-    const known = new Set(leadDetailTabs.map((t) => t.value));
-    const normalized = tabOrder.filter((v) => known.has(v));
-    const missing = leadDetailTabs.map((t) => t.value).filter((v) => !normalized.includes(v));
+    const visibleValues = visibleTabs.map((t) => t.value);
+    const visibleSet = new Set(visibleValues);
+    const normalized = tabOrder.filter((v) => visibleSet.has(v));
+    const missing = visibleValues.filter((v) => !normalized.includes(v));
     const values = [...normalized, ...missing];
-    return values.map((v) => leadDetailTabs.find((t) => t.value === v)).filter(Boolean);
-  }, [tabOrder]);
+    return values.map((v) => visibleTabs.find((t) => t.value === v)).filter(Boolean);
+  }, [tabOrder, visibleTabs]);
 
   useEffect(() => {
     if (!orderedTabs.some((t) => t?.value === activeTab)) {
@@ -177,18 +235,20 @@ export function LeadDetailClient({
 
   function moveTab(value: LeadDetailTabValue, direction: "up" | "down") {
     setTabOrder((prev) => {
-      const known = new Set(leadDetailTabs.map((t) => t.value));
-      const normalized = prev.filter((v) => known.has(v));
-      const missing = leadDetailTabs.map((t) => t.value).filter((v) => !normalized.includes(v));
-      const next = [...normalized, ...missing];
-      const idx = next.indexOf(value);
+      const all = leadDetailTabs.map((t) => t.value);
+      const visibleValues = visibleTabs.map((t) => t.value);
+      const visibleSet = new Set(visibleValues);
+      const normalized = prev.filter((v) => all.includes(v));
+      const currentVisible = [...normalized.filter((v) => visibleSet.has(v)), ...visibleValues.filter((v) => !normalized.includes(v))];
+      const idx = currentVisible.indexOf(value);
       if (idx === -1) return prev;
       const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= next.length) return prev;
-      const copy = [...next];
+      if (targetIdx < 0 || targetIdx >= currentVisible.length) return prev;
+      const copy = [...currentVisible];
       const [item] = copy.splice(idx, 1);
       copy.splice(targetIdx, 0, item);
-      return copy;
+      const hidden = all.filter((v) => !visibleSet.has(v));
+      return [...copy, ...hidden];
     });
   }
 
@@ -1175,7 +1235,7 @@ export function LeadDetailClient({
           </div>
 
           <div className="hidden sm:flex w-full items-center gap-2">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="flex w-full flex-wrap gap-2">
               {orderedTabs.map((tab) => (
                 <TabsTrigger key={tab.value} value={tab.value} className="min-h-[44px] text-xs sm:text-sm">
                   {tab.label}
