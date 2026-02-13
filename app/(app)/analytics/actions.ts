@@ -18,15 +18,7 @@ export type RepPerformanceData = {
 
 export type ProductionPipelineData = {
   stage: string;
-  currentCount: number;
-  stillInStageCount: number;
-  avgSecondsCompletedTransitions: number | null;
-};
-
-export type ProductionMetrics = {
-  stages: ProductionPipelineData[];
-  jobsCreatedInRange: number;
-  range: { from: string; to: string };
+  count: number;
 };
 
 export type StockAlertData = {
@@ -121,100 +113,29 @@ export async function getRepPerformanceData(): Promise<RepPerformanceData[]> {
 }
 
 export async function getProductionPipelineData(): Promise<ProductionPipelineData[]> {
-  const metrics = await getProductionMetrics();
-  return metrics.stages;
-}
-
-export async function getProductionMetrics(params?: { from?: string; to?: string }): Promise<ProductionMetrics> {
   const supabase = await createClient();
 
-  const toIso = params?.to || new Date().toISOString();
-  const fromIso =
-    params?.from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("production_stage")
+    .eq("status", "Quote Approved") // Or filter by existence of card_id
+    .not("production_stage", "is", null);
 
-  const [{ data: jobs, error: jobsError }, { data: openStages, error: openError }, { data: completed, error: completedError }, jobsCreated] =
-    await Promise.all([
-      supabase
-        .from("jobs")
-        .select("production_stage")
-        .eq("is_active", true)
-        .is("archived_at", null),
-      supabase.from("job_stage_history").select("stage").is("exited_at", null),
-      supabase
-        .from("job_stage_history")
-        .select("stage, entered_at, exited_at")
-        .not("entered_at", "is", null)
-        .not("exited_at", "is", null)
-        .gte("entered_at", fromIso)
-        .lte("entered_at", toIso),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", fromIso)
-        .lte("created_at", toIso),
-    ]);
-
-  if (jobsError) {
-    console.error("Error fetching production stage counts:", jobsError);
-  }
-  if (openError) {
-    console.error("Error fetching open stage counts:", openError);
-  }
-  if (completedError) {
-    console.error("Error fetching completed stage transitions:", completedError);
-  }
-  if (jobsCreated.error) {
-    console.error("Error fetching jobs created count:", jobsCreated.error);
+  if (error) {
+    console.error("Error fetching production pipeline:", error);
+    return [];
   }
 
-  const currentCounts: Record<string, number> = {};
-  (jobs || []).forEach((job) => {
-    const stage = job.production_stage || "Unknown";
-    currentCounts[stage] = (currentCounts[stage] || 0) + 1;
+  const counts: Record<string, number> = {};
+  data.forEach((lead) => {
+    const stage = lead.production_stage || "Unknown";
+    counts[stage] = (counts[stage] || 0) + 1;
   });
 
-  const openCounts: Record<string, number> = {};
-  (openStages || []).forEach((row) => {
-    const stage = row.stage || "Unknown";
-    openCounts[stage] = (openCounts[stage] || 0) + 1;
-  });
-
-  const durationTotals: Record<string, { totalSeconds: number; count: number }> = {};
-  (completed || []).forEach((row) => {
-    const enteredAt = row.entered_at ? Date.parse(row.entered_at as string) : NaN;
-    const exitedAt = row.exited_at ? Date.parse(row.exited_at as string) : NaN;
-    if (!Number.isFinite(enteredAt) || !Number.isFinite(exitedAt)) return;
-    const seconds = Math.max(0, Math.round((exitedAt - enteredAt) / 1000));
-    const stage = row.stage || "Unknown";
-    const bucket = durationTotals[stage] || { totalSeconds: 0, count: 0 };
-    bucket.totalSeconds += seconds;
-    bucket.count += 1;
-    durationTotals[stage] = bucket;
-  });
-
-  const allStages = new Set<string>([
-    ...Object.keys(currentCounts),
-    ...Object.keys(openCounts),
-    ...Object.keys(durationTotals),
-  ]);
-
-  const stages: ProductionPipelineData[] = Array.from(allStages).map((stage) => {
-    const dur = durationTotals[stage];
-    return {
-      stage,
-      currentCount: currentCounts[stage] || 0,
-      stillInStageCount: openCounts[stage] || 0,
-      avgSecondsCompletedTransitions: dur ? Math.round(dur.totalSeconds / dur.count) : null,
-    };
-  });
-
-  stages.sort((a, b) => b.currentCount - a.currentCount || a.stage.localeCompare(b.stage));
-
-  return {
-    stages,
-    jobsCreatedInRange: jobsCreated.count || 0,
-    range: { from: fromIso, to: toIso },
-  };
+  return Object.entries(counts).map(([stage, count]) => ({
+    stage,
+    count,
+  }));
 }
 
 export async function getStockAlerts(): Promise<StockAlertData[]> {
@@ -223,15 +144,14 @@ export async function getStockAlerts(): Promise<StockAlertData[]> {
   const { data, error } = await supabase
     .from("materials_inventory")
     .select("id, name, qty_on_hand, minimum_level, unit, supplier")
-    .or("low_stock.eq.true,qty_on_hand.lte.minimum_level");
+    .order("name");
 
   if (error) {
     console.error("Error fetching stock alerts:", error);
     return [];
   }
 
-  // Double check client side logic in case DB trigger/computed column isn't perfect
-  const alerts = data.filter(item => item.qty_on_hand <= item.minimum_level);
+  const alerts = (data || []).filter((item) => item.qty_on_hand <= item.minimum_level);
 
   return alerts;
 }

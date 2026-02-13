@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -11,32 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import StatusBadge from "@/components/status-badge";
-import { X, Filter, ChevronRight, MessageCircle, UserPlus, CheckCircle2 } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
-import { assignRepAction, changeStatusAction } from "./[id]/actions";
 
 import type { Lead } from '@/types/leads';
+import { assignRepAction } from "./[id]/actions";
+import { assignToMeAction } from "./actions";
 
 interface DisplayLead extends Lead {
   id?: string;
@@ -64,6 +49,7 @@ interface LeadsTableClientProps {
   initialLeads: DisplayLead[];
   reps: Rep[];
   currentUserId?: string | null;
+  isCeoOrAdmin?: boolean;
 }
 
 /**
@@ -128,18 +114,75 @@ function buildIntents(lead: DisplayLead): string[] {
   );
 }
 
-export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTableClientProps) {
+type FocusTab = "needs_action" | "unassigned" | "in_progress" | "in_production";
+
+type NextActionLabel =
+  | "Needs Contact"
+  | "Waiting on Client"
+  | "Ready for Production"
+  | "In Production";
+
+function normalizeStatus(value: string | null | undefined): string {
+  return (value || "").trim().toLowerCase();
+}
+
+function getNextActionLabel(lead: DisplayLead): NextActionLabel {
+  const status = normalizeStatus(lead.status);
+  const salesStatus = normalizeStatus(lead.sales_status);
+
+  const inProduction = status === "in production" || !!lead.production_stage || salesStatus === "in production";
+  if (inProduction) return "In Production";
+
+  const quoteApproved = status === "quote approved" || salesStatus === "quote approved";
+  if (quoteApproved) return "Ready for Production";
+
+  if (status === "quote sent" || status === "contacted") return "Waiting on Client";
+
+  return "Needs Contact";
+}
+
+function matchesFocusTab(lead: DisplayLead, tab: FocusTab): boolean {
+  if (tab === "unassigned") return !lead.assigned_rep_id;
+
+  const nextAction = getNextActionLabel(lead);
+
+  if (tab === "needs_action") {
+    if (!lead.assigned_rep_id) return false;
+    return nextAction === "Needs Contact" || nextAction === "Ready for Production";
+  }
+
+  if (tab === "in_progress") {
+    if (!lead.assigned_rep_id) return false;
+    return nextAction === "Waiting on Client";
+  }
+
+  return nextAction === "In Production";
+}
+
+function nextActionPillClass(label: NextActionLabel): string {
+  if (label === "Needs Contact") return "bg-primary/10 text-primary border-primary/20";
+  if (label === "Ready for Production") return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+  if (label === "In Production") return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
+  return "bg-muted text-muted-foreground border-border";
+}
+
+function isUuid(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdmin }: LeadsTableClientProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [intentFilters, setIntentFilters] = useState<Set<string>>(new Set());
   const [assignedRepFilter, setAssignedRepFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated");
-  const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [repSelectionByLead, setRepSelectionByLead] = useState<Record<string, string>>({});
+  const [sortBy, setSortBy] = useState<"updated" | "submitted">("updated");
+  const [focusTab, setFocusTab] = useState<FocusTab>("needs_action");
+  const [assignOpenLeadKey, setAssignOpenLeadKey] = useState<string | null>(null);
+  const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
+  const [isAssignPending, startAssignTransition] = useTransition();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Map rep names to leads
   const leadsWithRepNames = useMemo(() => {
@@ -245,17 +288,11 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     }
 
     // Apply sorting
-    if (sortBy === "created") {
+    if (sortBy === "submitted") {
       filtered.sort((a, b) => {
         const dateA = new Date(a.submission_date || a.created_at || 0).getTime();
         const dateB = new Date(b.submission_date || b.created_at || 0).getTime();
         return dateB - dateA; // Newest first
-      });
-    } else if (sortBy === "name") {
-      filtered.sort((a, b) => {
-        const nameA = (a.name || a.customer_name || "").toLowerCase();
-        const nameB = (b.name || b.customer_name || "").toLowerCase();
-        return nameA.localeCompare(nameB);
       });
     } else {
       // Default: updated (uses updated_at)
@@ -269,73 +306,9 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     return filtered;
   }, [leadsWithRepNames, searchQuery, statusFilter, intentFilters, assignedRepFilter, sortBy]);
 
-  // Filter presets
-  const applyPreset = (preset: string) => {
-    setActivePreset(preset);
-    if (preset === "my-leads") {
-      setStatusFilter("all");
-      setIntentFilters(new Set());
-      setAssignedRepFilter("all");
-    } else if (preset === "unassigned") {
-      setAssignedRepFilter("unassigned");
-      setStatusFilter("all");
-      setIntentFilters(new Set());
-    } else if (preset === "new-today") {
-      setStatusFilter("New");
-      setIntentFilters(new Set());
-      setAssignedRepFilter("all");
-    } else if (preset === "new-week") {
-      setStatusFilter("New");
-      setIntentFilters(new Set());
-      setAssignedRepFilter("all");
-    } else if (preset === "needs-follow-up") {
-      setStatusFilter("all");
-      setIntentFilters(new Set());
-      setAssignedRepFilter("all");
-    }
-  };
-
-  useEffect(() => {
-    const preset = searchParams.get("preset");
-    if (!preset) return;
-    applyPreset(preset);
-  }, [searchParams]);
-
-  // Apply needs-follow-up filter
-  const filteredWithPresets = useMemo(() => {
-    let result = filteredLeads;
-    
-    if (activePreset === "my-leads") {
-      if (currentUserId) {
-        result = result.filter((lead) => lead.assigned_rep_id === currentUserId);
-      }
-    } else if (activePreset === "new-today") {
-      const today = new Date().toDateString();
-      result = result.filter((lead) => {
-        const createdDate = new Date(lead.submission_date || lead.created_at || 0).toDateString();
-        return createdDate === today && (lead.status || "").toLowerCase() === "new";
-      });
-    } else if (activePreset === "new-week") {
-      const now = new Date().getTime();
-      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-      result = result.filter((lead) => {
-        const createdAt = new Date(lead.submission_date || lead.created_at || 0).getTime();
-        return createdAt >= sevenDaysAgo && (lead.status || "").toLowerCase() === "new";
-      });
-    } else if (activePreset === "needs-follow-up") {
-      const now = new Date().getTime();
-      const fortyEightHoursAgo = now - (48 * 60 * 60 * 1000);
-      result = result.filter((lead) => {
-        const updatedAt = new Date(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date || 0).getTime();
-        const status = (lead.status || "").toLowerCase();
-        const isStale = updatedAt < fortyEightHoursAgo;
-        const isNotCompleted = !["completed", "delivered", "lost"].includes(status);
-        return isStale && isNotCompleted;
-      });
-    }
-    
-    return result;
-  }, [filteredLeads, activePreset, currentUserId]);
+  const focusFilteredLeads = useMemo(() => {
+    return filteredLeads.filter((lead) => matchesFocusTab(lead, focusTab));
+  }, [filteredLeads, focusTab]);
 
   function clearFilters() {
     setSearchQuery("");
@@ -343,7 +316,6 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     setIntentFilters(new Set());
     setAssignedRepFilter("all");
     setSortBy("updated");
-    setActivePreset(null);
   }
 
   const hasActiveFilters = searchQuery || statusFilter !== "all" || intentFilters.size > 0 || assignedRepFilter !== "all";
@@ -360,645 +332,282 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId }: LeadsTab
     }
   };
 
-  const formatRelativeTime = (dateString: string | null | undefined) => {
-    if (!dateString) return "—";
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
+  const FocusTabs = () => {
+    const tabs: Array<{ value: FocusTab; label: string }> = [
+      { value: "needs_action", label: "Needs Action" },
+      { value: "unassigned", label: "Unassigned" },
+      { value: "in_progress", label: "In Progress" },
+      { value: "in_production", label: "In Production" },
+    ];
 
-      if (diffMins < 1) return "Just now";
-      if (diffMins < 60) return `${diffMins}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      if (diffDays < 7) return `${diffDays}d ago`;
-      
-      return formatDate(dateString);
-    } catch {
-      return dateString;
-    }
-  };
-
-  const openWhatsApp = (phone?: string | null) => {
-    if (!phone) return;
-    const digits = String(phone).replace(/[^+\d]/g, "");
-    window.open(`https://wa.me/${digits}`, "_blank", "noopener,noreferrer");
-  };
-
-  const approveQuote = async (leadDbId: string) => {
-    const fd = new FormData();
-    fd.append("leadId", leadDbId);
-    fd.append("status", "Quote Approved");
-    const res = await changeStatusAction(fd);
-    if (res && "error" in res) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success("Quote approved");
-    router.refresh();
-  };
-
-  const assignRep = async (leadDbId: string, repId: string) => {
-    const fd = new FormData();
-    fd.append("leadId", leadDbId);
-    fd.append("repId", repId);
-    const res = await assignRepAction(fd);
-    if (res && "error" in res) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success("Rep assigned");
-    router.refresh();
-  };
-
-  // Mobile filters component
-  const MobileFilters = () => (
-    <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" className="sm:hidden min-h-[44px] gap-2">
-          <Filter className="h-4 w-4" />
-          Filters
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-        <SheetHeader>
-          <SheetTitle>Filters</SheetTitle>
-        </SheetHeader>
-        <div className="mt-6 space-y-6">
-          {/* Status Filter */}
-          <div className="space-y-3">
-            <Label>Status</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {statuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Intent Filters */}
-          <div className="space-y-3">
-            <Label>Intents</Label>
-            <div className="space-y-2">
-              {["Quote", "Booking", "Question"].map((intent) => (
-                <div key={intent} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`intent-${intent}`}
-                    checked={intentFilters.has(intent)}
-                    onCheckedChange={() => toggleIntentFilter(intent)}
-                  />
-                  <Label htmlFor={`intent-${intent}`} className="font-normal cursor-pointer">
-                    {intent}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Assigned Rep Filter */}
-          {reps.length > 0 && (
-            <div className="space-y-3">
-              <Label>Assigned Rep</Label>
-              <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Reps" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Reps</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {reps.map((rep) => (
-                    <SelectItem key={rep.id} value={rep.id}>
-                      {rep.name || rep.email || rep.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Sort */}
-          <div className="space-y-3">
-            <Label>Sort by</Label>
-            <Select value={sortBy} onValueChange={(value: "updated" | "created" | "name") => setSortBy(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="updated">Updated</SelectItem>
-                <SelectItem value="created">Created</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {hasActiveFilters && (
-            <Button variant="outline" onClick={clearFilters} className="w-full">
-              <X className="h-4 w-4 mr-2" />
-              Clear Filters
-            </Button>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-
-  // Intent chips component
-  const IntentChips = ({ lead }: { lead: DisplayLead }) => {
-    const intents = buildIntents(lead);
-    if (intents.length === 0) return <span className="text-muted-foreground">—</span>;
-    
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {intents.map((intent) => (
-          <span
-            key={intent}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs font-medium"
+      <div data-tour="leads-focus-tabs" className="flex w-full gap-2 overflow-x-auto pb-1">
+        {tabs.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setFocusTab(tab.value)}
+            className={[
+              "whitespace-nowrap rounded-full border px-3 py-2 text-sm min-h-[44px]",
+              focusTab === tab.value ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50",
+            ].join(" ")}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            {intent}
-          </span>
+            {tab.label}
+          </button>
         ))}
       </div>
     );
   };
 
-  return (
-    <div className="space-y-4">
-      {/* Filter Presets */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={activePreset === "my-leads" ? "default" : "outline"}
-          size="sm"
-          onClick={() => applyPreset("my-leads")}
-          className="min-h-[36px] text-xs sm:text-sm"
-        >
-          My Leads
-        </Button>
-        <Button
-          variant={activePreset === "unassigned" ? "default" : "outline"}
-          size="sm"
-          onClick={() => applyPreset("unassigned")}
-          className="min-h-[36px] text-xs sm:text-sm"
-        >
-          Unassigned
-        </Button>
-        <Button
-          variant={activePreset === "new-today" ? "default" : "outline"}
-          size="sm"
-          onClick={() => applyPreset("new-today")}
-          className="min-h-[36px] text-xs sm:text-sm"
-        >
-          New Today
-        </Button>
-        <Button
-          variant={activePreset === "new-week" ? "default" : "outline"}
-          size="sm"
-          onClick={() => applyPreset("new-week")}
-          className="min-h-[36px] text-xs sm:text-sm"
-        >
-          New This Week
-        </Button>
-        <Button
-          variant={activePreset === "needs-follow-up" ? "default" : "outline"}
-          size="sm"
-          onClick={() => applyPreset("needs-follow-up")}
-          className="min-h-[36px] text-xs sm:text-sm"
-        >
-          Needs Follow-up
-        </Button>
-      </div>
+  function openAssignForLead(leadKey: string) {
+    setAssignOpenLeadKey((prev) => (prev === leadKey ? null : leadKey));
+    setAssignSelectedRepId("");
+  }
 
-      {/* Desktop Filters */}
-      <div className="hidden sm:flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Input
-            type="search"
-            placeholder="Search by name, email, phone, org, or lead ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="min-h-[44px] flex-1 min-w-[200px]"
-          />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {statuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          {/* Intent Filters - Desktop */}
-          <div className="flex items-center gap-3 min-h-[44px] px-3 border rounded-md bg-background">
-            <Label className="text-sm font-medium whitespace-nowrap">Intents:</Label>
-            <div className="flex gap-3">
-              {["Quote", "Booking", "Question"].map((intent) => (
-                <div key={intent} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`desktop-intent-${intent}`}
-                    checked={intentFilters.has(intent)}
-                    onCheckedChange={() => toggleIntentFilter(intent)}
-                  />
-                  <Label htmlFor={`desktop-intent-${intent}`} className="text-sm font-normal cursor-pointer whitespace-nowrap">
-                    {intent}
-                  </Label>
-                </div>
-              ))}
+  function handleAssignRep(leadDbId: string, repId: string) {
+    startAssignTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", leadDbId);
+      formData.set("repId", repId);
+      const result = await assignRepAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Lead assigned");
+      setAssignOpenLeadKey(null);
+      router.refresh();
+    });
+  }
+
+  function handleAssignToMe(leadDbId: string) {
+    startAssignTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", leadDbId);
+      const result = await assignToMeAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Lead assigned to you");
+      router.refresh();
+    });
+  }
+
+  const LeadCardRow = ({ lead }: { lead: DisplayLead }) => {
+    const leadKey = String(lead.id || lead.lead_id);
+    const nextAction = getNextActionLabel(lead);
+    const intents = buildIntents(lead);
+    const primaryIntent = intents[0] || null;
+    const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
+
+    const canAssignToMe = !isCeoOrAdmin && !!currentUserId && !lead.assigned_rep_id && isUuid(lead.id);
+    const canAssignAsAdmin = !!isCeoOrAdmin && !lead.assigned_rep_id && isUuid(lead.id);
+
+    return (
+      <Card className="transition-colors hover:bg-muted/30">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold leading-tight truncate">
+                  {lead.name || lead.customer_name || "—"}
+                </h3>
+                {primaryIntent && (
+                  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-background">
+                    {primaryIntent}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground truncate">{companyLabel}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
+                  {nextAction}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Submitted {formatDate(lead.submission_date || lead.created_at || "")}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <Button asChild className="min-h-[44px]" data-tour="lead-open">
+                <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
+              </Button>
+
+              {!lead.assigned_rep_id && (
+                <>
+                  {canAssignToMe && (
+                    <Button
+                      variant="outline"
+                      className="min-h-[44px]"
+                      disabled={isAssignPending}
+                      onClick={() => handleAssignToMe(lead.id as string)}
+                    >
+                      {isAssignPending ? "Assigning..." : "Assign to Me"}
+                    </Button>
+                  )}
+                  {canAssignAsAdmin && (
+                    <Button
+                      variant="outline"
+                      className="min-h-[44px]"
+                      onClick={() => openAssignForLead(leadKey)}
+                      disabled={isAssignPending}
+                    >
+                      Assign
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          {reps.length > 0 && (
-            <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter}>
-              <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-                <SelectValue placeholder="Assigned Rep" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Reps</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {reps.map((rep) => (
-                  <SelectItem key={rep.id} value={rep.id}>
-                    {rep.name || rep.email || rep.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {canAssignAsAdmin && assignOpenLeadKey === leadKey && (
+            <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+              <div className="space-y-2">
+                <Label>Assign to</Label>
+                <Select value={assignSelectedRepId} onValueChange={setAssignSelectedRepId}>
+                  <SelectTrigger className="min-h-[44px] w-full">
+                    <SelectValue placeholder="Select rep" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reps.map((rep) => (
+                      <SelectItem key={rep.id} value={rep.id}>
+                        {rep.name || rep.email || rep.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="min-h-[44px]"
+                disabled={!assignSelectedRepId || isAssignPending}
+                onClick={() => handleAssignRep(lead.id as string, assignSelectedRepId)}
+              >
+                {isAssignPending ? "Assigning..." : "Assign"}
+              </Button>
+            </div>
           )}
-          
-          <Select value={sortBy} onValueChange={(value: "updated" | "created" | "name") => setSortBy(value)}>
-            <SelectTrigger className="min-h-[44px] w-full sm:w-[180px]">
-              <SelectValue placeholder="Sort by:" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="updated">Updated</SelectItem>
-              <SelectItem value="created">Created</SelectItem>
-              <SelectItem value="name">Name</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          {hasActiveFilters && (
-            <Button
-              variant="outline"
-              onClick={clearFilters}
-              className="min-h-[44px] gap-2"
-            >
-              <X className="h-4 w-4" />
-              Clear Filters
-            </Button>
-          )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
-      {/* Mobile Filters */}
-      <div className="sm:hidden flex gap-2">
-        <Input
-          type="search"
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="min-h-[44px] flex-1"
-        />
-        <MobileFilters />
-      </div>
-
+  return (
+    <div className="space-y-4">
+      <FocusTabs />
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">
-          {filteredWithPresets.length} lead{filteredWithPresets.length !== 1 ? "s" : ""}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={viewMode === "cards" ? "default" : "outline"}
-            size="sm"
-            className="min-h-[36px]"
-            onClick={() => setViewMode("cards")}
-          >
-            Cards
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-[44px]"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          Advanced Filters
+        </Button>
+        {hasActiveFilters && (
+          <Button type="button" variant="ghost" className="min-h-[44px] gap-2" onClick={clearFilters}>
+            <X className="h-4 w-4" />
+            Clear
           </Button>
-          <Button
-            type="button"
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="sm"
-            className="min-h-[36px]"
-            onClick={() => setViewMode("table")}
-          >
-            Table
-          </Button>
-        </div>
-      </div>
-
-      <div className={viewMode === "cards" ? "hidden md:grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "hidden"}>
-        {filteredWithPresets.length === 0 ? (
-          <Card className="md:col-span-2 xl:col-span-3 2xl:col-span-4">
-            <CardContent className="py-10 text-center text-muted-foreground">
-              {hasActiveFilters || activePreset ? "No leads found matching your filters." : "No leads yet."}
-            </CardContent>
-          </Card>
-        ) : (
-          filteredWithPresets.map((lead) => {
-            const id = String(lead.id || lead.lead_id);
-            const repPick = repSelectionByLead[id] ?? lead.assigned_rep_id ?? "unassigned";
-            const leadHref = `/leads/${lead.lead_id || lead.id}`;
-            return (
-              <Card key={id} className="hover:bg-muted/30 transition-colors">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-lg font-semibold truncate">{lead.name || lead.customer_name || "—"}</div>
-                      {lead.organization ? (
-                        <div className="text-sm text-muted-foreground truncate">{lead.organization}</div>
-                      ) : null}
-                      <div className="mt-1 text-xs text-muted-foreground font-mono">{lead.lead_id}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <StatusBadge
-                        status={
-                          ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as
-                            | "new"
-                            | "assigned"
-                            | "contacted"
-                            | "quote_sent"
-                            | "quote_approved"
-                            | "in_production"
-                            | "completed"
-                            | "lost"
-                        }
-                      />
-                      <Button asChild variant="ghost" size="sm" className="min-h-[36px]">
-                        <Link href={leadHref}>
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <IntentChips lead={lead} />
-                  </div>
-
-                  <div className="grid gap-2 rounded-lg border p-3 bg-background/50">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="text-muted-foreground">Assigned rep</div>
-                      <div className="font-medium truncate">{lead.assigned_rep_name || "Unassigned"}</div>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="text-muted-foreground">Submitted</div>
-                      <div className="font-medium">{formatDate(lead.submission_date || lead.created_at || "")}</div>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="text-muted-foreground">Updated</div>
-                      <div className="font-medium">
-                        {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Select
-                        value={repPick}
-                        onValueChange={(v) => setRepSelectionByLead((prev) => ({ ...prev, [id]: v }))}
-                      >
-                        <SelectTrigger className="min-h-[44px]">
-                          <SelectValue placeholder="Assign rep" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
-                          {reps.map((rep) => (
-                            <SelectItem key={rep.id} value={rep.id}>
-                              {rep.name || rep.email || rep.id}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-[44px] gap-2"
-                        onClick={() => {
-                          if (!lead.id) {
-                            toast.error("Lead not available");
-                            return;
-                          }
-                          if (repPick === "unassigned") {
-                            toast.error("Pick a rep");
-                            return;
-                          }
-                          void assignRep(String(lead.id), repPick);
-                        }}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        Assign
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant="default"
-                        className="min-h-[44px] gap-2"
-                        onClick={() => {
-                          if (!lead.id) {
-                            toast.error("Lead not available");
-                            return;
-                          }
-                          void approveQuote(String(lead.id));
-                        }}
-                        disabled={(lead.status || "").toLowerCase() === "quote approved"}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Approve quote
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-[44px] gap-2"
-                        onClick={() => openWhatsApp(lead.phone)}
-                        disabled={!lead.phone}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        WhatsApp
-                      </Button>
-                    </div>
-
-                    <Button asChild variant="outline" className="min-h-[44px]">
-                      <Link href={leadHref}>View details</Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
         )}
       </div>
 
-      {/* Desktop Table View */}
-      <div className={viewMode === "table" ? "hidden md:block overflow-x-auto -mx-4 md:mx-0" : "hidden"}>
-        <div className="inline-block min-w-full align-middle">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Lead ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Intents</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Date Submitted</TableHead>
-                <TableHead className="hidden lg:table-cell">Assigned Rep</TableHead>
-                <TableHead className="hidden lg:table-cell">Updated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredWithPresets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    {hasActiveFilters || activePreset
-                      ? "No leads found matching your filters."
-                      : "No leads yet."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredWithPresets.map((lead) => (
-                  <TableRow 
-                    key={lead.id || lead.lead_id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (!target.closest('a') && !target.closest('button')) {
-                        router.push(`/leads/${lead.lead_id || lead.id}`);
-                      }
-                    }}
-                  >
-                    <TableCell>
-                      <Link
-                        href={`/leads/${lead.lead_id || lead.id}`}
-                        className="font-medium text-primary hover:underline min-h-[44px] flex items-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {lead.lead_id}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {lead.name || lead.customer_name || <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <IntentChips lead={lead} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge 
-                        status={
-                          ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as 
-                          "new" | "assigned" | "contacted" | "quote_sent" | "quote_approved" | "in_production" | "completed" | "lost"
-                        } 
-                      />
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatDate(lead.submission_date || lead.created_at || "")}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      {lead.assigned_rep_name || <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className="min-h-[44px]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Link href={`/leads/${lead.lead_id || lead.id}`} onClick={(e) => e.stopPropagation()}>View</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      {advancedOpen && (
+        <Card>
+          <CardContent className="p-4 sm:p-5 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>Search</Label>
+                <Input
+                  type="search"
+                  placeholder="Search by name, email, phone, org, or lead ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="min-h-[44px] mt-2"
+                />
+              </div>
 
-      {/* Mobile Card List View */}
-      <div className="md:hidden space-y-3">
-        {filteredWithPresets.length === 0 ? (
+              <div>
+                <Label>Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="min-h-[44px] mt-2">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {statuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Rep</Label>
+                <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter} disabled={reps.length === 0}>
+                  <SelectTrigger className="min-h-[44px] mt-2">
+                    <SelectValue placeholder="All reps" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Reps</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {reps.map((rep) => (
+                      <SelectItem key={rep.id} value={rep.id}>
+                        {rep.name || rep.email || rep.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Sort</Label>
+                <Select value={sortBy} onValueChange={(value: "updated" | "submitted") => setSortBy(value)}>
+                  <SelectTrigger className="min-h-[44px] mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="updated">Updated</SelectItem>
+                    <SelectItem value="submitted">Submitted</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Intent</Label>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+                {["Quote", "Booking", "Question"].map((intent) => (
+                  <div key={intent} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`intent-${intent}`}
+                      checked={intentFilters.has(intent)}
+                      onCheckedChange={() => toggleIntentFilter(intent)}
+                    />
+                    <Label htmlFor={`intent-${intent}`} className="font-normal cursor-pointer">
+                      {intent}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-3">
+        {focusFilteredLeads.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              {hasActiveFilters || activePreset
-                ? "No leads found matching your filters."
-                : "No leads yet."}
+              {hasActiveFilters ? "No leads found matching your filters." : "No leads yet."}
             </CardContent>
           </Card>
         ) : (
-          filteredWithPresets.map((lead) => (
-            <Card 
-              key={lead.id || lead.lead_id}
-              className="cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => router.push(`/leads/${lead.lead_id || lead.id}`)}
-            >
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-base truncate">
-                        {lead.name || lead.customer_name || "—"}
-                      </h3>
-                      {lead.organization && (
-                        <p className="text-sm text-muted-foreground truncate">{lead.organization}</p>
-                      )}
-                    </div>
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Link href={`/leads/${lead.lead_id || lead.id}`} onClick={(e) => e.stopPropagation()}>
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-mono">{lead.lead_id}</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <IntentChips lead={lead} />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <StatusBadge 
-                      status={
-                        ((lead.status || "new")?.toLowerCase().replace(/\s+/g, "_") || "new") as 
-                        "new" | "assigned" | "contacted" | "quote_sent" | "quote_approved" | "in_production" | "completed" | "lost"
-                      } 
-                    />
-                    <div className="text-xs text-muted-foreground">
-                      {lead.assigned_rep_name || <span>Unassigned</span>}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Submitted {formatDate(lead.submission_date || lead.created_at || "")}</span>
-                    <span>Updated {formatRelativeTime(lead.updated_at || lead.last_activity_at || lead.created_at || lead.submission_date)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          focusFilteredLeads.map((lead) => (
+            <LeadCardRow key={lead.id || lead.lead_id} lead={lead} />
           ))
         )}
       </div>

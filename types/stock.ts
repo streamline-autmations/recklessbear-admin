@@ -10,6 +10,8 @@ export interface MaterialInventory {
   restock_threshold: number;
   supplier: string | null;
   updated_at: string;
+  low_alert_sent_at?: string | null;
+  critical_alert_sent_at?: string | null;
   is_low_stock?: boolean;
   needs_restock?: boolean;
 }

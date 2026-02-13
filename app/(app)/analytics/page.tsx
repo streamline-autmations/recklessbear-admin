@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getFunnelData, getRepPerformanceData, getProductionMetrics, getStockAlerts } from "./actions";
+import { getFunnelData, getRepPerformanceData, getProductionPipelineData, getStockAlerts } from "./actions";
 import { LeadsFunnel } from "./components/leads-funnel";
 import { RepPerformance } from "./components/rep-performance";
 import { ProductionPipeline } from "./components/production-pipeline";
 import { StockAlerts } from "./components/stock-alerts";
 import { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Analytics | RecklessBear Admin",
@@ -39,10 +38,10 @@ export default async function AnalyticsPage() {
   }
 
   // Fetch data in parallel
-  const [funnelData, repData, productionMetrics, stockAlerts] = await Promise.all([
+  const [funnelData, repData, pipelineData, stockAlerts] = await Promise.all([
     getFunnelData(),
     getRepPerformanceData(),
-    getProductionMetrics(),
+    getProductionPipelineData(),
     getStockAlerts(),
   ]);
 
@@ -64,7 +63,7 @@ export default async function AnalyticsPage() {
             <StockAlerts data={stockAlerts} />
             <div className="col-span-3 grid gap-4 md:grid-cols-2">
                <LeadsFunnel data={funnelData} />
-               <ProductionPipeline data={productionMetrics.stages} />
+               <ProductionPipeline data={pipelineData} />
             </div>
           </div>
           <RepPerformance data={repData} />
@@ -76,22 +75,6 @@ export default async function AnalyticsPage() {
         
         <TabsContent value="reps" className="space-y-4">
           <RepPerformance data={repData} />
-        </TabsContent>
-
-        <TabsContent value="production" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Jobs Created</CardTitle>
-              <CardDescription>
-                {new Date(productionMetrics.range.from).toLocaleDateString()} →{" "}
-                {new Date(productionMetrics.range.to).toLocaleDateString()}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold text-foreground">{productionMetrics.jobsCreatedInRange}</div>
-            </CardContent>
-          </Card>
-          <ProductionPipeline data={productionMetrics.stages} />
         </TabsContent>
 
         <TabsContent value="stock" className="space-y-4">

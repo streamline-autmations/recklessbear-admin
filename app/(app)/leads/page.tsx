@@ -44,6 +44,20 @@ async function getCurrentUserId(): Promise<string | null> {
   return user?.id || null;
 }
 
+async function getCurrentUserRole(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  return data?.role || null;
+}
+
 async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -265,13 +279,15 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
 
 
 export default async function LeadsPage() {
-  const [{ leads, count }, reps, currentUserId] = await Promise.all([
+  const [{ leads, count }, reps, currentUserId, userRole] = await Promise.all([
     getLeadsWithCount(),
     getUsersForAssignment(),
     getCurrentUserId(),
+    getCurrentUserRole(),
   ]);
 
   const totalCount = count || leads.length;
+  const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
 
   return (
     <div className="space-y-6">
@@ -301,7 +317,12 @@ export default async function LeadsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <LeadsTableClient initialLeads={leads} reps={reps} currentUserId={currentUserId} />
+            <LeadsTableClient
+              initialLeads={leads}
+              reps={reps}
+              currentUserId={currentUserId}
+              isCeoOrAdmin={isCeoOrAdmin}
+            />
           </CardContent>
         </Card>
       )}

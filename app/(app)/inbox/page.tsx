@@ -4,7 +4,7 @@ import { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
-  title: "Inbox | RecklessBear Admin",
+  title: "RecklessBear WhatsApp | RecklessBear Admin",
 };
 
 export default async function InboxPage() {
@@ -12,7 +12,7 @@ export default async function InboxPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Inbox" subtitle="WhatsApp integration" />
+      <PageHeader title="RecklessBear WhatsApp" subtitle="WhatsApp inbox" />
       <InboxClient initialConversations={conversations} />
     </div>
   );

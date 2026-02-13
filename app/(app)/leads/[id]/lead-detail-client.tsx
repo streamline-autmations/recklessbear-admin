@@ -22,13 +22,15 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
+import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction, createTrelloCardAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { TrelloCreateButton } from "./trello-create-button";
 import { AttachmentGallery } from "./attachment-gallery";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
 import { ExternalLink, AlertCircle, CheckCircle2, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { assignToMeAction } from "../actions";
+import { getTrelloCardUrl } from "@/lib/trello";
 
 const leadDetailTabs = [
   { value: "overview", label: "Overview" },
@@ -118,10 +120,21 @@ export function LeadDetailClient({
   const [isStatusPending, startStatusTransition] = useTransition();
   const [isRepPending, startRepTransition] = useTransition();
   const [isDesignNotesPending, startDesignNotesTransition] = useTransition();
+  const [bannerNoteOpen, setBannerNoteOpen] = useState(false);
+  const [bannerNote, setBannerNote] = useState("");
+  const [isBannerPending, startBannerTransition] = useTransition();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const defaultTabOrder = useMemo<LeadDetailTabValue[]>(() => leadDetailTabs.map((t) => t.value), []);
   const [activeTab, setActiveTab] = useState<LeadDetailTabValue>("overview");
   const [tabOrder, setTabOrder] = useState<LeadDetailTabValue[]>(defaultTabOrder);
   const [arrangeTabsOpen, setArrangeTabsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileDetailsOpen) {
+      setActiveTab("overview");
+    }
+  }, [mobileDetailsOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -691,9 +704,295 @@ export function LeadDetailClient({
     });
   }
 
+  function canUseDbActions(): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
+  }
+
+  function normalizeStatus(value: string | null | undefined): string {
+    return (value || "").trim().toLowerCase();
+  }
+
+  const bannerState = useMemo(() => {
+    const status = normalizeStatus(selectedStatus || lead.status);
+    const salesStatus = normalizeStatus(lead.sales_status);
+    const isUnassigned = !lead.assigned_rep_id;
+    const inProduction = status === "in production" || !!lead.production_stage || salesStatus === "in production";
+    const quoteApproved = status === "quote approved" || salesStatus === "quote approved";
+    const quoteSentOrPending = status === "quote sent" || (lead.has_requested_quote && !quoteApproved);
+    const needsContact = !isUnassigned && (status === "new" || status === "assigned");
+    const trelloUrl = lead.card_id ? getTrelloCardUrl(lead.card_id) : null;
+
+    if (isUnassigned) {
+      return {
+        title: "Next Action",
+        message: "Assign this lead to a rep to start.",
+        kind: "unassigned" as const,
+        trelloUrl,
+      };
+    }
+
+    if (needsContact) {
+      return {
+        title: "Next Action",
+        message: "Contact the customer now.",
+        kind: "needs_contact" as const,
+        trelloUrl,
+      };
+    }
+
+    if (quoteSentOrPending) {
+      return {
+        title: "Next Action",
+        message: "Send or review quote.",
+        kind: "quote" as const,
+        trelloUrl,
+      };
+    }
+
+    if (quoteApproved && !lead.card_id) {
+      return {
+        title: "Next Action",
+        message: "Start production by creating a Trello card.",
+        kind: "ready_for_production" as const,
+        trelloUrl,
+      };
+    }
+
+    if (inProduction) {
+      return {
+        title: "Next Action",
+        message: "Track production stage and update customer if needed.",
+        kind: "in_production" as const,
+        trelloUrl,
+      };
+    }
+
+    return {
+      title: "Next Action",
+      message: "Review the lead and take the next step.",
+      kind: "default" as const,
+      trelloUrl,
+    };
+  }, [lead, selectedStatus]);
+
+  function submitBannerNote() {
+    if (!canUseDbActions()) {
+      toast.error("Notes are unavailable for this lead.");
+      return;
+    }
+    const note = bannerNote.trim();
+    if (!note) return;
+
+    startBannerTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", lead.id as string);
+      formData.set("note", note);
+      const result = await addNoteAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Note added");
+      setBannerNote("");
+      setBannerNoteOpen(false);
+      router.refresh();
+    });
+  }
+
+  function startProductionCreateTrello() {
+    if (!canUseDbActions()) {
+      toast.error("Start Production is unavailable for this lead.");
+      return;
+    }
+    startBannerTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", lead.id as string);
+      const result = await createTrelloCardAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Production started");
+      router.refresh();
+    });
+  }
+
+  function assignLeadToMe() {
+    if (!canUseDbActions()) {
+      toast.error("Assignment is unavailable for this lead.");
+      return;
+    }
+    startBannerTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", lead.id as string);
+      const result = await assignToMeAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Lead assigned to you");
+      router.refresh();
+    });
+  }
+
+  function focusRepAssign() {
+    setAdvancedOpen(true);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("rep");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header Actions: Status and Rep Assignment */}
+      <Dialog open={bannerNoteOpen} onOpenChange={setBannerNoteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Note</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Note</Label>
+            <Textarea
+              value={bannerNote}
+              onChange={(e) => setBannerNote(e.target.value)}
+              className="min-h-[160px]"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setBannerNoteOpen(false)} className="min-h-[44px]">
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitBannerNote} disabled={!bannerNote.trim() || isBannerPending} className="min-h-[44px]">
+              {isBannerPending ? "Saving..." : "Save Note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card data-tour="lead-next-action" className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{bannerState.title}</CardTitle>
+          <p className="text-sm text-muted-foreground">{bannerState.message}</p>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex flex-wrap gap-2">
+            {bannerState.kind === "unassigned" && (
+              <>
+                {!isCeoOrAdmin ? (
+                  <Button type="button" className="min-h-[44px]" onClick={assignLeadToMe} disabled={isBannerPending || !canUseDbActions()}>
+                    {isBannerPending ? "Assigning..." : "Assign to Me"}
+                  </Button>
+                ) : (
+                  <Button type="button" className="min-h-[44px]" onClick={focusRepAssign}>
+                    Assign Rep
+                  </Button>
+                )}
+              </>
+            )}
+
+            {bannerState.kind === "needs_contact" && (
+              <>
+                {lead.phone ? (
+                  <Button asChild className="min-h-[44px]">
+                    <a href={`tel:${lead.phone}`}>Call customer</a>
+                  </Button>
+                ) : lead.email ? (
+                  <Button asChild className="min-h-[44px]">
+                    <a href={`mailto:${lead.email}`}>Email customer</a>
+                  </Button>
+                ) : (
+                  <Button type="button" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
+                    {isStatusPending ? "Updating..." : "Mark contacted"}
+                  </Button>
+                )}
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
+                  {isStatusPending ? "Updating..." : "Mark contacted"}
+                </Button>
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                  Add note
+                </Button>
+              </>
+            )}
+
+            {bannerState.kind === "quote" && (
+              <>
+                <Button type="button" className="min-h-[44px]" onClick={() => setActiveTab("quote")}>
+                  Open quote details
+                </Button>
+                {lead.phone ? (
+                  <Button asChild variant="outline" className="min-h-[44px]">
+                    <a href={`tel:${lead.phone}`}>Call customer</a>
+                  </Button>
+                ) : lead.email ? (
+                  <Button asChild variant="outline" className="min-h-[44px]">
+                    <a href={`mailto:${lead.email}`}>Email customer</a>
+                  </Button>
+                ) : null}
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                  Add note
+                </Button>
+              </>
+            )}
+
+            {bannerState.kind === "ready_for_production" && (
+              <>
+                {isCeoOrAdmin ? (
+                  <Button type="button" className="min-h-[44px]" onClick={startProductionCreateTrello} disabled={isBannerPending}>
+                    {isBannerPending ? "Starting..." : "Start Production (Create Trello Card)"}
+                  </Button>
+                ) : (
+                  <Button type="button" className="min-h-[44px]" disabled>
+                    Awaiting admin
+                  </Button>
+                )}
+              </>
+            )}
+
+            {bannerState.kind === "in_production" && bannerState.trelloUrl && (
+              <>
+                <Button asChild className="min-h-[44px]">
+                  <a href={bannerState.trelloUrl} target="_blank" rel="noopener noreferrer">
+                    Open Trello card
+                  </a>
+                </Button>
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                  Add note
+                </Button>
+              </>
+            )}
+
+            {bannerState.kind === "default" && (
+              <>
+                {lead.phone ? (
+                  <Button asChild className="min-h-[44px]">
+                    <a href={`tel:${lead.phone}`}>Call customer</a>
+                  </Button>
+                ) : lead.email ? (
+                  <Button asChild className="min-h-[44px]">
+                    <a href={`mailto:${lead.email}`}>Email customer</a>
+                  </Button>
+                ) : null}
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                  Add note
+                </Button>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-[44px]"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          {advancedOpen ? "Hide Advanced" : "Advanced"}
+        </Button>
+      </div>
+
+      {advancedOpen && (
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -780,6 +1079,7 @@ export function LeadDetailClient({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Tabs */}
       <Dialog open={arrangeTabsOpen} onOpenChange={setArrangeTabsOpen}>
@@ -837,18 +1137,41 @@ export function LeadDetailClient({
       >
         <div className="mb-6 flex items-center justify-between gap-2">
           <div className="w-full sm:hidden">
-            <Select value={activeTab} onValueChange={(v) => setActiveTab(v as LeadDetailTabValue)}>
-              <SelectTrigger className="min-h-[44px] w-full">
-                <SelectValue placeholder="Select section" />
-              </SelectTrigger>
-              <SelectContent>
-                {orderedTabs.map((tab) => (
-                  <SelectItem key={tab.value} value={tab.value}>
-                    {tab.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!mobileDetailsOpen ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px] w-full"
+                onClick={() => setMobileDetailsOpen(true)}
+              >
+                More details
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Select value={activeTab} onValueChange={(v) => setActiveTab(v as LeadDetailTabValue)}>
+                    <SelectTrigger className="min-h-[44px] w-full">
+                      <SelectValue placeholder="Select section" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orderedTabs.map((tab) => (
+                        <SelectItem key={tab.value} value={tab.value}>
+                          {tab.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-[44px]"
+                  onClick={() => setMobileDetailsOpen(false)}
+                >
+                  Hide
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="hidden sm:flex w-full items-center gap-2">

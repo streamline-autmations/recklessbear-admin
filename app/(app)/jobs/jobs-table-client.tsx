@@ -1,92 +1,131 @@
 "use client";
 
 import Link from "next/link";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useState } from "react";
+import type { Lead } from "@/types/leads";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
-import { getTrelloCardUrl } from "@/lib/trello";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-export type JobsListRow = {
+type Rep = {
   id: string;
-  trello_card_id: string | null;
-  trello_list_id: string | null;
-  production_stage: string | null;
-  sales_status: string | null;
-  payment_status: string | null;
-  updated_at: string | null;
-  lead: Array<{
-    id: string;
-    lead_id: string;
-    customer_name: string | null;
-    name: string | null;
-    organization: string | null;
-  }> | null;
+  name: string | null;
+  email?: string | null;
 };
 
-interface JobsTableClientProps {
-  jobs: JobsListRow[];
-}
+export function JobsTableClient({
+  initialLeads,
+}: {
+  initialLeads: Lead[];
+  reps: Rep[];
+  currentUserId: string | null;
+}) {
+  const [search, setSearch] = useState("");
 
-export function JobsTableClient({ jobs }: JobsTableClientProps) {
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return initialLeads;
+    return initialLeads.filter((l) => {
+      return (
+        (l.lead_id || "").toLowerCase().includes(q) ||
+        (l.customer_name || "").toLowerCase().includes(q) ||
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.organization || "").toLowerCase().includes(q) ||
+        (l.email || "").toLowerCase().includes(q) ||
+        (l.phone || "").toLowerCase().includes(q) ||
+        (l.production_stage || "").toLowerCase().includes(q)
+      );
+    });
+  }, [initialLeads, search]);
+
   return (
-    <div className="w-full overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Job</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Sales</TableHead>
-            <TableHead>Stage</TableHead>
-            <TableHead>Payment</TableHead>
-            <TableHead className="text-right">Trello</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {jobs.map((job) => {
-            const lead = job.lead?.[0] || null;
-            const customer = lead?.customer_name || lead?.name || "Unknown";
-            const org = lead?.organization || "";
-            const trelloUrl = job.trello_card_id ? getTrelloCardUrl(job.trello_card_id) : null;
-            return (
-              <TableRow key={job.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/jobs/${job.id}`} className="hover:underline">
-                    {lead?.lead_id || job.id}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{customer}</span>
-                    {org ? <span className="text-xs text-muted-foreground">{org}</span> : null}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{job.sales_status || "—"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge>{job.production_stage || "—"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{job.payment_status || "—"}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  {trelloUrl ? (
-                    <Button asChild variant="outline" size="sm" className="h-8 gap-2">
-                      <a href={trelloUrl} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" />
-                        Open
-                      </a>
-                    </Button>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
+    <div className="space-y-4">
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by lead, customer, org, stage..."
+        className="max-w-md"
+      />
+
+      <div className="rounded-md border hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Lead</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Stage</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                  No jobs found.
                 </TableCell>
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+            ) : (
+              filtered.map((lead) => (
+                <TableRow key={lead.id || lead.lead_id}>
+                  <TableCell className="font-medium">{lead.lead_id}</TableCell>
+                  <TableCell>{lead.customer_name || lead.name || "—"}</TableCell>
+                  <TableCell>{lead.production_stage || "—"}</TableCell>
+                  <TableCell>{lead.sales_status || lead.status || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/leads/${lead.id || lead.lead_id}`}>View</Link>
+                      </Button>
+                      {lead.card_id && (
+                        <Button asChild size="sm">
+                          <a href={`https://trello.com/c/${lead.card_id}`} target="_blank" rel="noreferrer">
+                            Trello
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:hidden">
+        {filtered.map((lead) => (
+          <div key={lead.id || lead.lead_id} className="rounded-lg border border-border p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold">{lead.customer_name || lead.name || "—"}</div>
+                <div className="text-sm text-muted-foreground">{lead.lead_id}</div>
+                <div className="text-sm mt-2">
+                  <span className="text-muted-foreground">Stage: </span>
+                  {lead.production_stage || "—"}
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Status: </span>
+                  {lead.sales_status || lead.status || "—"}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button asChild size="sm" variant="outline" className="flex-1">
+                <Link href={`/leads/${lead.id || lead.lead_id}`}>View</Link>
+              </Button>
+              {lead.card_id && (
+                <Button asChild size="sm" className="flex-1">
+                  <a href={`https://trello.com/c/${lead.card_id}`} target="_blank" rel="noreferrer">
+                    Trello
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
+

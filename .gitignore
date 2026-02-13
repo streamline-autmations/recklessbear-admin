@@ -39,3 +39,5 @@ next-env.d.ts
 KB_PACK_*.md
 CHATBOT_KB_FILES_INDEX.md
 CHATBOT_KNOWLEDGE_BASE.md
+
+/data/stock/

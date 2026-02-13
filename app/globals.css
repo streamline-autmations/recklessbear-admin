@@ -83,4 +83,13 @@
       radial-gradient(900px circle at 92% 0%, hsl(var(--primary) / 0.05), transparent 48%),
       radial-gradient(800px circle at 100% 110%, hsl(var(--primary) / 0.04), transparent 50%);
   }
+
+  .rb-wa-chat-bg {
+    background-color: #efeae2;
+    background-image:
+      radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+      radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px, 56px 56px;
+    background-position: 0 0, 14px 14px;
+  }
 }

@@ -18,13 +18,14 @@ import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Messa
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/leads", icon: UsersIcon },
   { name: "Jobs", href: "/jobs", icon: Briefcase },
   { name: "Stock", href: "/stock", icon: Package },
-  { name: "Inbox", href: "/inbox", icon: MessageSquare },
+  { name: "RecklessBear WhatsApp", href: "/inbox", icon: MessageSquare },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Users", href: "/users", icon: ShieldCheck },
   { name: "Settings", href: "/settings", icon: Settings },
@@ -42,7 +43,8 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const themeForRender = mounted ? resolvedTheme : "dark";
+  const themeForRender = mounted ? resolvedTheme : "light";
+  const isLight = themeForRender === "light";
   const isDesktopCollapsed = isSidebarCollapsed;
 
   useEffect(() => {
@@ -117,6 +119,13 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
               onClick={() => {
                 if (mobile) setIsSheetOpen(false);
               }}
+              data-tour={
+                item.href === "/leads"
+                  ? "sidebar-leads"
+                  : item.href === "/jobs"
+                    ? "sidebar-jobs"
+                    : undefined
+              }
               title={collapsed ? item.name : undefined}
               aria-label={collapsed ? item.name : undefined}
               aria-current={isActive ? "page" : undefined}
@@ -145,6 +154,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
 
   return (
     <div className="min-h-screen text-foreground flex">
+      <OnboardingTour />
       <aside
         className={`hidden md:flex border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] p-4 flex-shrink-0 transition-[width] duration-200 ${
           isDesktopCollapsed ? "w-[92px] p-3" : "w-64 p-4"
@@ -175,9 +185,9 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                 <Image
                   src={logos.word}
                   alt="RecklessBear Admin"
-                  width={150}
-                  height={24}
-                  className="h-6 w-[150px] object-contain"
+                  width={isLight ? 132 : 150}
+                  height={isLight ? 20 : 24}
+                  className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
                   priority
                 />
               </div>
@@ -219,9 +229,9 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
                       <Image
                         src={logos.word}
                         alt="RecklessBear Admin"
-                        width={150}
-                        height={24}
-                        className="h-6 w-[150px] object-contain"
+                        width={isLight ? 132 : 150}
+                        height={isLight ? 20 : 24}
+                        className={isLight ? "h-5 w-[132px] object-contain" : "h-6 w-[150px] object-contain"}
                         priority
                       />
                     </div>

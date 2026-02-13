@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { randomUUID } from "crypto";
+import { ensureJobAndTrelloCardForLead } from "@/lib/trello-sync";
 
 const addNoteSchema = z.object({
   leadId: z.string().uuid(),
@@ -216,10 +216,10 @@ export async function changeStatusAction(
     return { error: "Not authenticated" };
   }
 
-  // Get current user's name/email for last_modified_by
+  // Get current user's profile for last_modified_by and role
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email")
+    .select("role, full_name, email")
     .eq("user_id", user.id)
     .single();
   
@@ -228,9 +228,7 @@ export async function changeStatusAction(
   // Get current lead details (status, card_id, etc.)
   const { data: currentLead } = await supabase
     .from("leads")
-    .select(
-      "id, status, card_id, lead_id, customer_name, name, email, phone, organization, payment_status, trello_product_list, design_notes, product_type, production_stage"
-    )
+    .select("status, card_id, lead_id, customer_name, name, production_stage")
     .eq("id", result.data.leadId)
     .single();
 
@@ -241,151 +239,41 @@ export async function changeStatusAction(
   const oldStatus = currentLead.status;
   const newStatus = result.data.status;
   
-  // Phase 3: Sales -> Job Conversion Logic
-  let trelloUpdateData: Record<string, unknown> = {};
-  let jobCreated = false;
-  let createdJobId: string | null = null;
-  let createdTrelloListId: string | null = null;
-  
   if (newStatus === "Quote Approved") {
-    const { createTrelloJobCard, LIST_ID_TO_STAGE, TRELLO_LISTS } = await import("@/lib/trello");
-
-    const paymentStatus = (currentLead.payment_status as string | null) || "Pending";
-
-    const { data: existingJob, error: jobLookupError } = await supabase
-      .from("jobs")
-      .select("id, trello_card_id, trello_list_id, production_stage")
-      .eq("lead_id", result.data.leadId)
-      .is("archived_at", null)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (jobLookupError) {
-      return { error: jobLookupError.message || "Failed to check existing job" };
+    if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+      return { error: "Unauthorized: Only CEO/Admin can start production" };
     }
 
-    const jobId = existingJob?.id || randomUUID();
+    const ensured = await ensureJobAndTrelloCardForLead({
+      supabase,
+      leadDbId: result.data.leadId,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      actorProfile: profile,
+    });
 
-    const needsTrelloCard = !currentLead.card_id && !existingJob?.trello_card_id;
-
-    if (needsTrelloCard) {
-      const cardData = {
-        leadId: currentLead.lead_id as string,
-        jobId,
-        customerName: (currentLead.customer_name || currentLead.name || currentLead.lead_id) as string,
-        organization: currentLead.organization as string | null,
-        email: currentLead.email as string | null,
-        phone: currentLead.phone as string | null,
-        paymentStatus,
-        orderQuantity: null,
-        orderDeadline: null,
-        productList: (currentLead.trello_product_list as string | null) || null,
-        designNotes: (currentLead.design_notes as string | null) || null,
-        productType: (currentLead.product_type as string | null) || null,
-        listId: TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION,
-      };
-
-      const cardResult = await createTrelloJobCard(cardData);
-
-      if ("error" in cardResult) {
-        return { error: `Failed to create Trello card: ${cardResult.error}` };
-      }
-
-      const initialStage = LIST_ID_TO_STAGE[cardResult.listId] || "orders_awaiting_confirmation";
-
-      if (existingJob) {
-        const nowIso = new Date().toISOString();
-        const { error: updateJobError } = await supabase
-          .from("jobs")
-          .update({
-            trello_card_id: cardResult.id,
-            trello_list_id: cardResult.listId,
-            production_stage: initialStage,
-            sales_status: "Quote Approved",
-            payment_status: paymentStatus,
-            updated_at: nowIso,
-          })
-          .eq("id", existingJob.id);
-
-        if (updateJobError) {
-          return { error: updateJobError.message || "Failed to update job" };
-        }
-
-        await supabase
-          .from("job_stage_history")
-          .update({ exited_at: nowIso })
-          .eq("job_id", existingJob.id)
-          .is("exited_at", null);
-
-        await supabase.from("job_stage_history").insert({
-          job_id: existingJob.id,
-          stage: initialStage,
-          entered_at: nowIso,
-        });
-      } else {
-        const { error: createJobError } = await supabase.from("jobs").insert({
-          id: jobId,
-          lead_id: result.data.leadId,
-          trello_card_id: cardResult.id,
-          trello_list_id: cardResult.listId,
-          production_stage: initialStage,
-          sales_status: "Quote Approved",
-          payment_status: paymentStatus,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-        if (createJobError) {
-          return { error: createJobError.message || "Failed to create job" };
-        }
-
-        await supabase.from("job_stage_history").insert({
-          job_id: jobId,
-          stage: initialStage,
-          entered_at: new Date().toISOString(),
-        });
-      }
-
-      trelloUpdateData = {
-        card_id: cardResult.id,
-        card_created: true,
-        production_stage: initialStage,
-      };
-
-      jobCreated = true;
-      createdJobId = jobId;
-      createdTrelloListId = cardResult.listId;
-    } else if (!existingJob) {
-      const { error: createJobError } = await supabase.from("jobs").insert({
-        id: jobId,
-        lead_id: result.data.leadId,
-        trello_card_id: currentLead.card_id,
-        trello_list_id: null,
-        production_stage: currentLead.production_stage || null,
-        sales_status: "Quote Approved",
-        payment_status: paymentStatus,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      if (createJobError) {
-        return { error: createJobError.message || "Failed to create job" };
-      }
-
-      jobCreated = true;
-      createdJobId = jobId;
+    if (ensured.ok === false) {
+      return { error: ensured.error };
     }
+
+    await supabase.from("lead_events").insert({
+      lead_db_id: result.data.leadId,
+      actor_user_id: user.id,
+      event_type: "status_changed",
+      payload: { from: oldStatus, to: newStatus },
+    });
+
+    revalidatePath(`/leads/${ensured.leadId}`);
+    revalidatePath("/jobs");
+    revalidatePath("/leads");
+    return;
   }
 
-  // Update lead status with audit fields and potential Trello data
   const { error: updateError } = await supabase
     .from("leads")
-    .update({ 
+    .update({
       status: newStatus,
-      sales_status: newStatus, // Sync sales_status with status
-      ...trelloUpdateData,
+      sales_status: newStatus,
       updated_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
       last_modified_by: modifierName,
@@ -396,30 +284,14 @@ export async function changeStatusAction(
     return { error: updateError.message || "Failed to update status" };
   }
 
-  // Insert event - using lead_db_id
   await supabase.from("lead_events").insert({
     lead_db_id: result.data.leadId,
     actor_user_id: user.id,
     event_type: "status_changed",
     payload: { from: oldStatus, to: newStatus },
   });
-  
-  if (jobCreated) {
-    await supabase.from("lead_events").insert({
-      lead_db_id: result.data.leadId,
-      actor_user_id: user.id,
-      event_type: "job_created",
-      payload: { 
-        jobId: createdJobId,
-        cardId: trelloUpdateData.card_id,
-        trelloListId: createdTrelloListId,
-        initialStage: trelloUpdateData.production_stage,
-      },
-    });
-  }
 
   revalidatePath(`/leads/${result.data.leadId}`);
-  revalidatePath("/jobs");
 }
 
 export async function assignRepAction(
@@ -711,83 +583,21 @@ export async function createTrelloCardAction(
     return { error: "Unauthorized: Only CEO/Admin can create Trello cards" };
   }
 
-  const modifierName = profile?.full_name || user.email || "Admin";
-
-  // Get lead details
-  const { data: lead, error: leadError } = await supabase
-    .from("leads")
-    .select("id, lead_id, customer_name, name, email, phone, organization, trello_product_list, design_notes, delivery_date, card_id")
-    .eq("id", result.data.leadId)
-    .single();
-
-  if (leadError || !lead) {
-    return { error: "Lead not found" };
-  }
-
-  if (lead.card_id) {
-    return { error: "Trello card already exists for this lead" };
-  }
-
-  // Import createTrelloCard dynamically (server-only)
-  const { createTrelloCard } = await import("@/lib/trello");
-
-  // Create Trello card
-  const cardName = `Lead: ${lead.customer_name || lead.name || lead.lead_id}`;
-  
-  const descriptionParts = [
-    `Lead ID: ${lead.lead_id}`,
-    `Customer: ${lead.customer_name || lead.name || "N/A"}`,
-    `Email: ${lead.email || "N/A"}`,
-    `Phone: ${lead.phone || "N/A"}`,
-    `Organization: ${lead.organization || "N/A"}`,
-    lead.delivery_date ? `Delivery Date: ${lead.delivery_date}` : null,
-    "",
-    "---PRODUCT LIST---",
-    lead.trello_product_list || "(No product list provided)",
-    "---END LIST---",
-    "",
-    "Design Notes:",
-    lead.design_notes || "(No design notes)",
-    "",
-    "Created from RecklessBear Admin"
-  ];
-
-  const cardDescription = descriptionParts.filter(part => part !== null).join("\n");
-
-  const cardResult = await createTrelloCard({
-    name: cardName,
-    description: cardDescription,
+  const ensured = await ensureJobAndTrelloCardForLead({
+    supabase,
+    leadDbId: result.data.leadId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    actorProfile: profile,
   });
 
-  if ("error" in cardResult) {
-    return { error: cardResult.error };
+  if (ensured.ok === false) {
+    return { error: ensured.error };
   }
 
-  // Update lead with card info
-  const { error: updateError } = await supabase
-    .from("leads")
-    .update({
-      card_id: cardResult.id,
-      card_created: true,
-      updated_at: new Date().toISOString(),
-      last_modified: new Date().toISOString(),
-      last_modified_by: modifierName,
-    })
-    .eq("id", result.data.leadId);
-
-  if (updateError) {
-    return { error: updateError.message || "Failed to update lead with card info" };
-  }
-
-  // Create event
-  await supabase.from("lead_events").insert({
-    lead_db_id: result.data.leadId,
-    actor_user_id: user.id,
-    event_type: "trello_card_created",
-    payload: { cardId: cardResult.id, cardUrl: cardResult.url },
-  });
-
-  revalidatePath(`/leads/${lead.lead_id}`);
+  revalidatePath(`/leads/${ensured.leadId}`);
+  revalidatePath("/jobs");
+  revalidatePath("/leads");
 }
 
 const autoAssignLeadSchema = z.object({
