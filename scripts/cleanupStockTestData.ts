@@ -21,6 +21,21 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const TEST_PREFIX = "TEST - ";
 
 async function main() {
+  const { data: seedTx, error: seedTxErr } = await supabase
+    .from("stock_transactions")
+    .select("id")
+    .ilike("notes", "TEST_SEED:%");
+  if (seedTxErr) throw new Error(`Failed selecting TEST_SEED transactions: ${seedTxErr.message}`);
+
+  const seedTxIds = (seedTx || []).map((t: { id: string }) => t.id);
+  if (seedTxIds.length > 0) {
+    const { error: delSeedTxErr } = await supabase.from("stock_transactions").delete().in("id", seedTxIds);
+    if (delSeedTxErr) throw new Error(`Failed deleting TEST_SEED stock_transactions: ${delSeedTxErr.message}`);
+  }
+
+  const { error: delSeedMovErr } = await supabase.from("stock_movements").delete().ilike("notes", "TEST_SEED:%");
+  if (delSeedMovErr) throw new Error(`Failed deleting TEST_SEED stock_movements: ${delSeedMovErr.message}`);
+
   const { data: jobs, error: jobsErr } = await supabase
     .from("jobs")
     .select("id, invoice_number, lead_id")
@@ -40,6 +55,15 @@ async function main() {
         jobIds.map((id) => String(id))
       );
     if (delTransErr) throw new Error(`Failed deleting stock_transactions for TEST jobs: ${delTransErr.message}`);
+
+    const { error: delTransRefErr } = await supabase
+      .from("stock_transactions")
+      .delete()
+      .in(
+        "reference",
+        jobIds.map((id) => String(id))
+      );
+    if (delTransRefErr) throw new Error(`Failed deleting stock_transactions (reference) for TEST jobs: ${delTransRefErr.message}`);
 
     const { error: delMovErr } = await supabase
       .from("stock_movements")

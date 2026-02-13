@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { WhatsAppConversation, WhatsAppMessage } from "@/types/inbox";
-import { getMessages, sendMessageAction, updateCustomDisplayNameAction } from "./actions";
+import { getMessages, markConversationRead, sendMessageAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Send, ArrowLeft, Phone, User, Pencil } from "lucide-react";
+import { Search, Send, ArrowLeft, Phone, User, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 interface InboxClientProps {
@@ -25,13 +24,16 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
-  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
-  const [customNameDraft, setCustomNameDraft] = useState("");
-  const [isSavingCustomName, setIsSavingCustomName] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSendingRef = useRef(false);
+  const conversationsRef = useRef<WhatsAppConversation[]>(initialConversations);
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,6 +52,14 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
           setIsLoadingMessages(false);
         });
 
+      const hasUnread = (conversationsRef.current.find((c) => c.id === selectedId)?.unread_count || 0) > 0;
+      if (hasUnread) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === selectedId ? { ...c, unread_count: 0 } : c)),
+        );
+        void markConversationRead(selectedId);
+      }
+
       if (window.innerWidth < 768) {
         setShowChatOnMobile(true);
       }
@@ -60,9 +70,6 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     const term = searchQuery.toLowerCase();
     return (
       c.phone.toLowerCase().includes(term) ||
-      (c.display_name || "").toLowerCase().includes(term) ||
-      (c.custom_display_name || "").toLowerCase().includes(term) ||
-      (c.last_message_preview || "").toLowerCase().includes(term) ||
       (c.lead?.name || "").toLowerCase().includes(term) ||
       (c.lead?.organization || "").toLowerCase().includes(term)
     );
@@ -70,11 +77,22 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedId || !newMessage.trim()) return;
+    if (!selectedId || !newMessage.trim() || isSendingRef.current) return;
 
-    const tempId = `tmp_${Date.now()}`;
+    const createUuidV4 = () => {
+      const cryptoObj = globalThis.crypto;
+      if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
+      const bytes = new Uint8Array(16);
+      cryptoObj?.getRandomValues?.(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    };
+
+    const messageId = createUuidV4();
     const tempMessage: WhatsAppMessage = {
-      id: tempId,
+      id: messageId,
       conversation_id: selectedId,
       direction: "outbound",
       text: newMessage,
@@ -87,108 +105,33 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     setMessages(prev => [...prev, tempMessage]);
     setNewMessage("");
     setIsSending(true);
+    isSendingRef.current = true;
 
-    const result = await sendMessageAction(selectedId, tempMessage.text, tempId);
+    try {
+      const result = await sendMessageAction(selectedId, messageId, tempMessage.text);
 
-    if (result && "error" in result) {
-      toast.error(result.error || "Failed to send message");
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-    } else {
-      toast.success("Message sent");
+      if (result && "error" in result) {
+        toast.error("Failed to send message");
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      } else {
+        toast.success("Message sent");
+      }
+    } finally {
+      setIsSending(false);
+      isSendingRef.current = false;
     }
-    setIsSending(false);
   };
 
   const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(d);
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString();
-  };
-
-  const getPhoneDigits = (phone: string) => {
-    return String(phone || "").replace(/\D/g, "");
-  };
-
-  const formatPhoneForDisplay = (phone: string) => {
-    const digits = getPhoneDigits(phone);
-    if (digits.startsWith("27") && digits.length === 11) {
-      const rest = digits.slice(2);
-      return `+27 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`;
-    }
-    if (String(phone || "").trim().startsWith("+") && digits) return `+${digits}`;
-    return String(phone || "").trim();
-  };
-
-  const getWhatsAppLink = (phone: string) => {
-    const digits = getPhoneDigits(phone);
-    return digits ? `https://wa.me/${digits}` : null;
-  };
-
-  const getConversationBaseTitle = (conv: WhatsAppConversation) => {
-    return conv.lead?.name || conv.display_name || formatPhoneForDisplay(conv.phone);
-  };
-
-  const getConversationTitle = (conv: WhatsAppConversation) => {
-    const base = getConversationBaseTitle(conv);
-    const custom = String(conv.custom_display_name || "").trim();
-    return custom ? `${base} (${custom})` : base;
-  };
-
-  const getInitials = (value: string) => {
-    const trimmed = String(value || "").trim();
-    if (!trimmed) return "U";
-    const parts = trimmed.split(/\s+/).filter(Boolean);
-    const a = parts[0]?.[0] || "";
-    const b = parts.length > 1 ? parts[1]?.[0] || "" : parts[0]?.[1] || "";
-    return `${a}${b}`.toUpperCase() || "U";
-  };
-
-  const openEditName = () => {
-    if (!selectedConversation) return;
-    setCustomNameDraft(selectedConversation.custom_display_name || "");
-    setIsEditNameOpen(true);
-  };
-
-  const saveCustomName = async () => {
-    if (!selectedConversation) return;
-    setIsSavingCustomName(true);
-    const result = await updateCustomDisplayNameAction(selectedConversation.id, customNameDraft);
-    if (result && "error" in result) {
-      toast.error(result.error || "Failed to update name");
-      setIsSavingCustomName(false);
-      return;
-    }
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedConversation.id
-          ? { ...c, custom_display_name: (result as { custom_display_name: string | null }).custom_display_name }
-          : c
-      )
-    );
-    toast.success("Name updated");
-    setIsSavingCustomName(false);
-    setIsEditNameOpen(false);
-  };
-
-  const clearCustomName = async () => {
-    if (!selectedConversation) return;
-    setIsSavingCustomName(true);
-    const result = await updateCustomDisplayNameAction(selectedConversation.id, null);
-    if (result && "error" in result) {
-      toast.error(result.error || "Failed to clear name");
-      setIsSavingCustomName(false);
-      return;
-    }
-
-    setConversations((prev) =>
-      prev.map((c) => (c.id === selectedConversation.id ? { ...c, custom_display_name: null } : c))
-    );
-    toast.success("Custom name cleared");
-    setIsSavingCustomName(false);
-    setIsEditNameOpen(false);
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-ZA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" }).format(d);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -199,49 +142,63 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
-      <div className={`w-full md:w-80 border-r flex flex-col ${showChatOnMobile ? "hidden md:flex" : "flex"}`}>
-        <div className="p-4 border-b bg-muted/30">
-          <div className="font-semibold text-lg">Conversations</div>
+    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-[#d1d7db] bg-white shadow-sm text-[#111b21]">
+      <div
+        className={`w-full md:w-[380px] border-r border-[#d1d7db] flex flex-col ${
+          showChatOnMobile ? "hidden md:flex" : "flex"
+        }`}
+      >
+        <div className="px-4 py-3 border-b border-[#d1d7db] bg-[#f0f2f5]">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">RecklessBear WhatsApp</div>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-[#54656f] hover:text-[#111b21]">
+                <Phone className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-[#54656f] hover:text-[#111b21]">
+                <User className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#667781]" />
             <Input
-              placeholder="Search conversations..."
-              className="pl-9"
+              placeholder="Search or start new chat"
+              className="pl-9 rounded-full bg-white border-[#d1d7db] focus-visible:ring-0"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-white">
           {filteredConversations.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No conversations found</div>
+            <div className="p-8 text-center text-[#667781]">No chats yet</div>
           ) : (
             filteredConversations.map((conv) => (
               <div
                 key={conv.id}
                 onClick={() => setSelectedId(conv.id)}
-                className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
+                className={`px-4 py-3 border-b border-[#e9edef] cursor-pointer transition-colors ${
                   selectedId === conv.id
-                    ? "bg-muted border-l-4 border-l-primary"
-                    : "border-l-4 border-l-transparent"
+                    ? "bg-[#e9edef] border-l-4 border-l-[#00a884]"
+                    : "hover:bg-[#f5f6f6] border-l-4 border-l-transparent"
                 }`}
               >
-                <div className="flex justify-between items-start mb-1">
-                  <div className="font-semibold truncate pr-2">{getConversationTitle(conv)}</div>
-                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="font-semibold truncate">{conv.lead?.name || conv.phone}</div>
+                  <div className="text-xs text-[#667781] whitespace-nowrap">
                     {formatDate(conv.last_message_at)}
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-muted-foreground truncate w-full pr-2">
-                    {conv.last_message_preview || conv.lead?.organization || formatPhoneForDisplay(conv.phone)}
+                <div className="flex justify-between items-center gap-3 mt-0.5">
+                  <div className="text-sm text-[#667781] truncate w-full">
+                    {conv.lead?.organization || conv.phone}
                   </div>
                   {conv.unread_count > 0 && (
                     <Badge
                       variant="destructive"
-                      className="rounded-full h-5 w-5 flex items-center justify-center p-0 text-[10px]"
+                      className="rounded-full h-5 min-w-5 flex items-center justify-center px-1 text-[10px] bg-[#25d366] text-white hover:bg-[#25d366]"
                     >
                       {conv.unread_count}
                     </Badge>
@@ -256,66 +213,53 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
       <div className={`flex-1 flex flex-col ${!showChatOnMobile ? "hidden md:flex" : "flex"}`}>
         {selectedConversation ? (
           <>
-            <div className="p-4 border-b flex items-center justify-between bg-muted/30">
+            <div className="px-4 py-3 border-b border-[#d1d7db] flex items-center justify-between bg-[#f0f2f5]">
               <div className="flex items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden"
+                  className="md:hidden h-9 w-9 text-[#54656f] hover:text-[#111b21]"
                   onClick={() => setShowChatOnMobile(false)}
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <Avatar>
                   <AvatarFallback>
-                    {getInitials(getConversationBaseTitle(selectedConversation))}
+                    {selectedConversation.lead?.name?.substring(0, 2).toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="font-semibold flex items-center gap-2">
-                    {getConversationTitle(selectedConversation)}
+                    {selectedConversation.lead?.name || selectedConversation.phone}
                     {selectedConversation.lead && (
-                      <Badge variant="outline" className="text-[10px] h-5">
+                      <Badge variant="outline" className="text-[10px] h-5 border-[#d1d7db] text-[#54656f]">
                         Lead
                       </Badge>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {(() => {
-                      const href = getWhatsAppLink(selectedConversation.phone);
-                      const label = formatPhoneForDisplay(selectedConversation.phone);
-                      return href ? (
-                        <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                          {label}
-                        </a>
-                      ) : (
-                        label
-                      );
-                    })()}
+                  <div className="text-xs text-[#667781]">
+                    {selectedConversation.phone}
                     {selectedConversation.lead?.organization ? ` • ${selectedConversation.lead.organization}` : ""}
                   </div>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="text-[#54656f] hover:text-[#111b21]">
                   <Phone className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="text-[#54656f] hover:text-[#111b21]">
                   <User className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={openEditName}>
-                  <Pencil className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 rb-wa-chat-bg">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
               ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <div className="flex flex-col items-center justify-center h-full text-[#667781]">
                   <p>No messages yet</p>
                   <p className="text-sm">Start the conversation below</p>
                 </div>
@@ -325,26 +269,20 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                   return (
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div
-                        className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 ${
+                        className={`max-w-[86%] md:max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
                           isMe
-                            ? "bg-primary text-primary-foreground rounded-tr-none"
-                            : "bg-card border rounded-tl-none shadow-sm"
+                            ? "bg-[#d9fdd3] text-[#111b21] rounded-tr-none"
+                            : "bg-white text-[#111b21] border border-[#e9edef] rounded-tl-none"
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                         <div
-                          className={`text-[10px] mt-1 text-right ${
-                            isMe ? "text-primary-foreground/70" : "text-muted-foreground"
-                          }`}
+                          className="text-[10px] mt-1 text-right text-[#667781]"
                         >
                           {formatTime(msg.created_at)}
                           {isMe && (
-                            <span className="ml-1">
-                              {msg.status === "read"
-                                ? "✓✓"
-                                : msg.status === "delivered"
-                                  ? "✓✓"
-                                  : "✓"}
+                            <span className={`ml-1 ${msg.status === "read" ? "text-[#53bdeb]" : ""}`}>
+                              {msg.status === "delivered" || msg.status === "read" ? "✓✓" : "✓"}
                             </span>
                           )}
                         </div>
@@ -356,21 +294,21 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 border-t bg-background">
+            <div className="px-4 py-3 border-t border-[#d1d7db] bg-[#f0f2f5]">
               <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
                 <Textarea
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
-                  className="flex-1 min-h-[40px] max-h-[120px] resize-none py-3"
+                  placeholder="Message"
+                  className="flex-1 min-h-[42px] max-h-[120px] resize-none rounded-full bg-white px-4 py-3 text-sm border border-[#d1d7db] focus-visible:ring-0 focus-visible:ring-offset-0"
                   rows={1}
                 />
                 <Button
                   type="submit"
                   size="icon"
                   disabled={!newMessage.trim() || isSending}
-                  className="mb-0.5"
+                  className="mb-0.5 bg-[#00a884] hover:bg-[#029c7c] text-white"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -378,55 +316,15 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/10">
-            <div className="bg-muted/30 p-4 rounded-full mb-4">
-              <Send className="h-8 w-8 text-muted-foreground" />
+          <div className="flex-1 flex flex-col items-center justify-center text-[#667781] rb-wa-chat-bg">
+            <div className="bg-white/70 p-4 rounded-full mb-4 border border-[#e9edef] shadow-sm">
+              <MessageSquare className="h-8 w-8 text-[#54656f]" />
             </div>
-            <h3 className="font-semibold text-lg">WhatsApp Inbox</h3>
+            <h3 className="font-semibold text-lg text-[#111b21]">RecklessBear WhatsApp</h3>
             <p>Select a conversation to start messaging</p>
           </div>
         )}
       </div>
-
-      <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit custom display name</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Custom name</div>
-            <Input
-              value={customNameDraft}
-              onChange={(e) => setCustomNameDraft(e.target.value)}
-              placeholder="Type a custom name…"
-            />
-            {selectedConversation && (
-              <div className="text-xs text-muted-foreground">
-                Shows as: {getConversationBaseTitle(selectedConversation)}{" "}
-                {customNameDraft.trim() ? `(${customNameDraft.trim()})` : ""}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex justify-between sm:justify-between">
-            <Button type="button" variant="outline" onClick={clearCustomName} disabled={isSavingCustomName}>
-              Clear
-            </Button>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditNameOpen(false)}
-                disabled={isSavingCustomName}
-              >
-                Cancel
-              </Button>
-              <Button type="button" onClick={saveCustomName} disabled={isSavingCustomName}>
-                Save
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

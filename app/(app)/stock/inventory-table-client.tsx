@@ -23,9 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, AlertTriangle } from "lucide-react";
 import {
   auditSetMaterialQuantityAction,
-  consumeMaterialAction,
   createMaterialInventoryAction,
-  restockMaterialAction,
   updateMaterialInventoryAction,
 } from "./actions";
 import { toast } from "sonner";
@@ -37,19 +35,24 @@ interface InventoryTableClientProps {
   materials: MaterialInventory[];
   isAdmin: boolean;
   consumedThisMonth: Array<{ material_id: string; delta_qty: number }>;
+  manualAdjustments: Array<{
+    id: string;
+    created_at: string;
+    delta_qty: number;
+    notes: string | null;
+    material: { name: string; unit: string } | null;
+    created_by_name: string | null;
+  }>;
 }
 
-export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: InventoryTableClientProps) {
+export function InventoryTableClient({ materials, isAdmin, consumedThisMonth, manualAdjustments }: InventoryTableClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialInventory | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isRestockOpen, setIsRestockOpen] = useState(false);
-  const [isConsumeOpen, setIsConsumeOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   
-  const [qtyValue, setQtyValue] = useState("");
   const [newQtyValue, setNewQtyValue] = useState("");
   const [referenceValue, setReferenceValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
@@ -95,74 +98,28 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
   }
 
   function resetMovementFields() {
-    setQtyValue("");
     setNewQtyValue("");
     setReferenceValue("");
     setNotesValue("");
-  }
-
-  function submitRestock() {
-    if (!selectedMaterial) return;
-    const qty = Number(qtyValue);
-    if (!qty || qty <= 0) return;
-    const formData = new FormData();
-    formData.set("materialId", selectedMaterial.id);
-    formData.set("quantity", String(qty));
-    if (referenceValue) formData.set("reference", referenceValue);
-    if (notesValue) formData.set("notes", notesValue);
-
-    startTransition(async () => {
-      const result = await restockMaterialAction(formData);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success("Restock recorded");
-        setIsRestockOpen(false);
-        resetMovementFields();
-        router.refresh();
-      }
-    });
-  }
-
-  function submitConsume() {
-    if (!selectedMaterial) return;
-    const qty = Number(qtyValue);
-    if (!qty || qty <= 0) return;
-    const formData = new FormData();
-    formData.set("materialId", selectedMaterial.id);
-    formData.set("quantity", String(qty));
-    if (referenceValue) formData.set("reference", referenceValue);
-    if (notesValue) formData.set("notes", notesValue);
-
-    startTransition(async () => {
-      const result = await consumeMaterialAction(formData);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success("Consumption recorded");
-        setIsConsumeOpen(false);
-        resetMovementFields();
-        router.refresh();
-      }
-    });
   }
 
   function submitAudit() {
     if (!selectedMaterial) return;
     const newQty = Number(newQtyValue);
     if (Number.isNaN(newQty) || newQty < 0) return;
+    if (!notesValue.trim()) return;
     const formData = new FormData();
     formData.set("materialId", selectedMaterial.id);
     formData.set("newQtyOnHand", String(newQty));
     if (referenceValue) formData.set("reference", referenceValue);
-    if (notesValue) formData.set("notes", notesValue);
+    formData.set("notes", notesValue);
 
     startTransition(async () => {
       const result = await auditSetMaterialQuantityAction(formData);
       if (result?.error) {
         toast.error(result.error);
       } else {
-        toast.success("Audit adjustment recorded");
+        toast.success("Manual adjustment recorded");
         setIsAuditOpen(false);
         resetMovementFields();
         router.refresh();
@@ -208,11 +165,11 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="minimum_level">Min Level</Label>
+                    <Label htmlFor="minimum_level">Minimum Level (Critical)</Label>
                     <Input id="minimum_level" name="minimum_level" type="number" step="0.01" defaultValue="0" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="restock_threshold">Restock Threshold</Label>
+                    <Label htmlFor="restock_threshold">Restock Threshold (Low)</Label>
                     <Input id="restock_threshold" name="restock_threshold" type="number" step="0.01" defaultValue="0" />
                   </div>
                 </div>
@@ -267,12 +224,12 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                       {isLowStock ? (
                         <span className="inline-flex items-center text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded-full">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          Low Stock
+                          Critical
                         </span>
                       ) : needsRestock ? (
                         <span className="inline-flex items-center text-xs text-yellow-700 font-medium bg-yellow-50 px-2 py-1 rounded-full">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          Restock
+                          Low
                         </span>
                       ) : (
                         <span className="inline-flex items-center text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-full">
@@ -296,28 +253,6 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                             Edit
                           </Button>
                           <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedMaterial(material);
-                              setIsRestockOpen(true);
-                              resetMovementFields();
-                            }}
-                          >
-                            Restock
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedMaterial(material);
-                              setIsConsumeOpen(true);
-                              resetMovementFields();
-                            }}
-                          >
-                            Consume
-                          </Button>
-                          <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
@@ -327,7 +262,7 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                               setNewQtyValue(String(material.qty_on_hand ?? 0));
                             }}
                           >
-                            Audit
+                            Manual Adjustment
                           </Button>
                         </div>
                       ) : (
@@ -366,7 +301,7 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                                     {material.qty_on_hand} <span className="text-sm font-normal text-muted-foreground">{material.unit}</span>
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Min: {material.minimum_level} · Restock: {material.restock_threshold}
+                                  Min (Critical): {material.minimum_level} · Restock (Low): {material.restock_threshold}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   Used this month: {usedThisMonth || "—"} {material.unit}
@@ -379,24 +314,24 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                               <div className="flex gap-2">
                                 <Button
                                     size="sm"
+                                    variant="outline"
                                     onClick={() => {
-                                        setSelectedMaterial(material);
-                                        setIsRestockOpen(true);
-                                        resetMovementFields();
+                                      setSelectedMaterial(material);
+                                      setIsEditOpen(true);
                                     }}
                                 >
-                                    Restock
+                                    Edit
                                 </Button>
                                 <Button
                                     size="sm"
-                                    variant="secondary"
                                     onClick={() => {
-                                        setSelectedMaterial(material);
-                                        setIsConsumeOpen(true);
-                                        resetMovementFields();
+                                      setSelectedMaterial(material);
+                                      resetMovementFields();
+                                      setNewQtyValue(String(material.qty_on_hand ?? 0));
+                                      setIsAuditOpen(true);
                                     }}
                                 >
-                                    Consume
+                                    Adjust
                                 </Button>
                               </div>
                             ) : (
@@ -409,77 +344,10 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
         })}
       </div>
 
-      {/* Restock Dialog */}
-      <Dialog open={isRestockOpen} onOpenChange={setIsRestockOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Restock {selectedMaterial?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label>Quantity to Add</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={qtyValue}
-                onChange={(e) => setQtyValue(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Reference</Label>
-              <Input value={referenceValue} onChange={(e) => setReferenceValue(e.target.value)} placeholder="Optional reference..." />
-            </div>
-            <div className="grid gap-2">
-              <Label>Notes</Label>
-              <Input
-                value={notesValue}
-                onChange={(e) => setNotesValue(e.target.value)}
-                placeholder="Optional notes..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRestockOpen(false)}>Cancel</Button>
-            <Button onClick={submitRestock} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Restock"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isConsumeOpen} onOpenChange={setIsConsumeOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Consume {selectedMaterial?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label>Quantity to Consume</Label>
-              <Input type="number" step="0.01" value={qtyValue} onChange={(e) => setQtyValue(e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="grid gap-2">
-              <Label>Reference</Label>
-              <Input value={referenceValue} onChange={(e) => setReferenceValue(e.target.value)} placeholder="Optional reference..." />
-            </div>
-            <div className="grid gap-2">
-              <Label>Notes</Label>
-              <Input value={notesValue} onChange={(e) => setNotesValue(e.target.value)} placeholder="Optional notes..." />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConsumeOpen(false)}>Cancel</Button>
-            <Button onClick={submitConsume} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Consume"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={isAuditOpen} onOpenChange={setIsAuditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Audit Adjustment {selectedMaterial?.name}</DialogTitle>
+            <DialogTitle>Manual Adjustment {selectedMaterial?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-2">
@@ -491,14 +359,14 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
               <Input value={referenceValue} onChange={(e) => setReferenceValue(e.target.value)} placeholder="Optional reference..." />
             </div>
             <div className="grid gap-2">
-              <Label>Notes</Label>
-              <Input value={notesValue} onChange={(e) => setNotesValue(e.target.value)} placeholder="Optional notes..." />
+              <Label>Reason</Label>
+              <Input value={notesValue} onChange={(e) => setNotesValue(e.target.value)} placeholder="Required reason..." />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAuditOpen(false)}>Cancel</Button>
             <Button onClick={submitAudit} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Audit"}
+              {isPending ? "Saving..." : "Confirm Adjustment"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -529,11 +397,11 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="edit-min">Min Level</Label>
+                            <Label htmlFor="edit-min">Minimum Level (Critical)</Label>
                             <Input id="edit-min" name="minimum_level" type="number" step="0.01" defaultValue={selectedMaterial.minimum_level} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="edit-threshold">Restock Threshold</Label>
+                            <Label htmlFor="edit-threshold">Restock Threshold (Low)</Label>
                             <Input id="edit-threshold" name="restock_threshold" type="number" step="0.01" defaultValue={selectedMaterial.restock_threshold} />
                         </div>
                     </div>
@@ -544,6 +412,49 @@ export function InventoryTableClient({ materials, isAdmin, consumedThisMonth }: 
             )}
         </DialogContent>
       </Dialog>
+
+      <div className="rounded-md border">
+        <div className="px-4 py-3 border-b">
+          <div className="text-sm font-medium">Manual Stock Adjustment Log</div>
+          <div className="text-xs text-muted-foreground">Date, adjustment, material, user, reason</div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Material</TableHead>
+              <TableHead>Adjustment</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Reason</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {manualAdjustments.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  No manual adjustments yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              manualAdjustments.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="text-muted-foreground">{new Date(row.created_at).toLocaleString()}</TableCell>
+                  <TableCell className="font-medium">
+                    {row.material?.name || "—"}{" "}
+                    <span className="text-xs text-muted-foreground">{row.material?.unit || ""}</span>
+                  </TableCell>
+                  <TableCell className={row.delta_qty < 0 ? "text-destructive" : "text-green-700"}>
+                    {row.delta_qty > 0 ? "+" : ""}
+                    {row.delta_qty}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{row.created_by_name || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{row.notes || "—"}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

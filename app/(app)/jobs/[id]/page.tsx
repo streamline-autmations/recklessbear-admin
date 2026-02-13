@@ -61,7 +61,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { data: lead } = await supabase
     .from("leads")
     .select("lead_id, customer_name, name, organization")
-    .eq("lead_id", jobRow.lead_id)
+    .eq("id", jobRow.lead_id)
     .single();
 
   const { data: deductionTx } = await supabase
@@ -84,11 +84,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     lineItems = (li || []) as unknown as DeductionLineItem[];
   }
 
-  const displayName = lead?.organization || lead?.customer_name || lead?.name || jobRow.lead_id;
+  const displayName = lead?.organization || lead?.customer_name || lead?.name || lead?.lead_id || jobRow.lead_id;
+  const leadCode = lead?.lead_id || jobRow.id.substring(0, 8);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`Job ${jobRow.lead_id}`} subtitle={displayName ? `Customer: ${displayName}` : undefined} />
+      <PageHeader title={`Job ${leadCode}`} subtitle={displayName ? `Customer: ${displayName}` : undefined} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
