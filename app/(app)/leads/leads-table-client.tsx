@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/browser";
@@ -183,6 +183,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
   const [isAssignPending, startAssignTransition] = useTransition();
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
 
   // Map rep names to leads
   const leadsWithRepNames = useMemo(() => {
@@ -207,7 +208,12 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         },
         (payload) => {
           console.log('[realtime] Lead changed:', payload.eventType, payload.new || payload.old);
-          router.refresh();
+          if (realtimeRefreshTimerRef.current) {
+            window.clearTimeout(realtimeRefreshTimerRef.current);
+          }
+          realtimeRefreshTimerRef.current = window.setTimeout(() => {
+            router.refresh();
+          }, 500);
         }
       )
       .subscribe((status) => {
@@ -215,6 +221,10 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
       });
 
     return () => {
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+        realtimeRefreshTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
   }, [router]);

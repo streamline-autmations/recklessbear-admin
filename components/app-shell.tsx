@@ -18,7 +18,11 @@ import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, Messa
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
-import { OnboardingTour } from "@/components/onboarding-tour";
+import dynamic from "next/dynamic";
+
+const OnboardingTour = dynamic(() => import("@/components/onboarding-tour").then((m) => m.OnboardingTour), {
+  ssr: false,
+});
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

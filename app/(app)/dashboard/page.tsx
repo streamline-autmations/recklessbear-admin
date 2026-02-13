@@ -34,7 +34,7 @@ async function getRepLeadsCount(userId: string): Promise<number> {
 
   const { count, error } = await supabase
     .from('leads')
-    .select('*', { count: 'exact', head: true })
+    .select('*', { count: 'estimated', head: true })
     .eq('assigned_rep_id', userId);
 
   if (error) {
@@ -50,7 +50,7 @@ async function getTotalLeads(): Promise<number> {
 
   const { count, error } = await supabase
     .from('leads')
-    .select('*', { count: 'exact', head: true });
+    .select('*', { count: 'estimated', head: true });
 
   if (error) {
     console.error('Error fetching total leads:', error);
@@ -68,7 +68,7 @@ async function getLeadsLast7Days(): Promise<number> {
 
   const { count, error } = await supabase
     .from('leads')
-    .select('*', { count: 'exact', head: true })
+    .select('*', { count: 'estimated', head: true })
     .gte('created_at', sevenDaysAgo.toISOString());
 
   if (error) {

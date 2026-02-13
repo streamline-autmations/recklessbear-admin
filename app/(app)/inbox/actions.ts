@@ -10,7 +10,12 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
   const { data, error } = await supabase
     .from("wa_conversations")
     .select(`
-      *,
+      id,
+      phone,
+      lead_id,
+      assigned_rep_id,
+      last_message_at,
+      unread_count,
       lead:leads (
         id,
         name,
@@ -24,7 +29,7 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
     return [];
   }
 
-  return data as unknown as WhatsAppConversation[];
+  return (data || []).slice(0, 150) as unknown as WhatsAppConversation[];
 }
 
 export async function getMessages(conversationId: string): Promise<WhatsAppMessage[]> {
@@ -34,14 +39,15 @@ export async function getMessages(conversationId: string): Promise<WhatsAppMessa
     .from("wa_messages")
     .select("*")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(150);
 
   if (error) {
     console.error("Error fetching messages:", error);
     return [];
   }
 
-  return data as WhatsAppMessage[];
+  return (data as WhatsAppMessage[]).reverse();
 }
 
 export async function markConversationRead(conversationId: string) {

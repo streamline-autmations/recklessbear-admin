@@ -5,6 +5,9 @@ import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet
 import type { Lead } from '@/types/leads';
 import { RefreshButton } from './refresh-button';
 import { PageHeader } from '@/components/page-header';
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Force dynamic rendering to always fetch latest data
 export const dynamic = "force-dynamic";
@@ -58,7 +61,7 @@ async function getCurrentUserRole(): Promise<string | null> {
   return data?.role || null;
 }
 
-async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
+async function getLeadsPage(params: { page: number; pageSize: number }): Promise<{ leads: Lead[]; hasNextPage: boolean }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -69,16 +72,17 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
       if (spreadsheetLeads.length > 0) {
         console.log(`[leads-page] Not authenticated, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-        return { leads: spreadsheetLeads, count: spreadsheetLeads.length };
+        return { leads: spreadsheetLeads, hasNextPage: false };
       }
     } catch {
       // Ignore spreadsheet errors if auth fails
     }
-    return { leads: [], count: 0 };
+    return { leads: [], hasNextPage: false };
   }
 
-  // Primary: Fetch from Supabase with no caching
-  // Limit to 500 records (or implement pagination later)
+  const start = Math.max(0, (params.page - 1) * params.pageSize);
+  const endInclusive = start + params.pageSize;
+
   const query = supabase
     .from('leads')
     .select(`
@@ -90,8 +94,6 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       phone,
       organization,
       status, 
-      lead_type,
-      source,
       sales_status,
       payment_status,
       production_stage,
@@ -105,36 +107,17 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       last_modified,
       last_modified_by,
       last_activity_at,
-      date_approved,
       delivery_date,
-      date_delivered_collected,
-      date_completed,
-      category,
-      product_type,
-      accessories_selected,
-      include_warmups,
-      quantity_range,
-      has_deadline,
-      message,
-      design_notes,
-      attachments,
-      trello_product_list,
       booking_time,
-      booking_approved,
-      pre_call_notes,
       question,
-      question_data,
-      quote_data,
-      booking_data,
       card_id,
       card_created
-    `, { count: 'exact' })
+    `)
     .order('submission_date', { ascending: false, nullsFirst: false })
     .order('lead_id', { ascending: false })
-    // Remove limit to fetch all leads - Supabase has a default limit of 1000
-    .limit(1000)
+    .range(start, endInclusive)
   
-  const { data: leadsData, error, count } = await query;
+  const { data: leadsData, error } = await query;
 
   if (error) {
     console.error('Error fetching leads from Supabase:', {
@@ -148,23 +131,25 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
       if (spreadsheetLeads.length > 0) {
         console.log(`[leads-page] Supabase error, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-        return { leads: spreadsheetLeads, count: spreadsheetLeads.length };
+        return { leads: spreadsheetLeads, hasNextPage: false };
       }
     } catch (spreadsheetError) {
       console.error("[leads-page] Spreadsheet fallback also failed:", spreadsheetError);
     }
-    return { leads: [], count: 0 };
+    return { leads: [], hasNextPage: false };
   }
 
-  console.log(`[leads-page] Loaded ${count || leadsData?.length || 0} leads from Supabase`);
+  const rows = leadsData || [];
+  const hasNextPage = rows.length > params.pageSize;
+  const pageRows = hasNextPage ? rows.slice(0, params.pageSize) : rows;
 
   // If Supabase returns empty, fallback to spreadsheet (dev mode)
-  if ((!leadsData || leadsData.length === 0)) {
+  if ((!pageRows || pageRows.length === 0)) {
     try {
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
       if (spreadsheetLeads.length > 0) {
         console.log(`[leads-page] Supabase empty, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-        return { leads: spreadsheetLeads, count: spreadsheetLeads.length };
+        return { leads: spreadsheetLeads, hasNextPage: false };
       }
     } catch {
       // Ignore spreadsheet errors if Supabase is just empty
@@ -172,49 +157,17 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
   }
 
   // Transform Supabase data to Lead format and build intents array
-  const leads = (leadsData || []).map((lead) => {
+  const leads = (pageRows || []).map((lead) => {
     // Build intents array from flags (canonical 3 intents only)
     const intents: string[] = [];
     if (lead.has_requested_quote) intents.push("Quote");
     if (lead.has_booked_call) intents.push("Booking");
     if (lead.has_asked_question) intents.push("Question");
     
-    // TEMPORARY FALLBACK: Only infer from field data if ALL 3 flags are false
-    // This is for legacy leads that haven't been normalized yet
-    // TODO: Remove this fallback after all leads are normalized
     if (!lead.has_requested_quote && !lead.has_booked_call && !lead.has_asked_question) {
-      // Strong evidence for Quote
-      const hasQuoteEvidence = !!(
-        (lead.quote_data && typeof lead.quote_data === 'object' && lead.quote_data && Object.keys(lead.quote_data).length > 0) ||
-        lead.attachments ||
-        lead.category ||
-        lead.product_type ||
-        lead.quantity_range ||
-        (lead.has_deadline && lead.has_deadline !== 'false' && lead.has_deadline !== '') ||
-        (lead.include_warmups && lead.include_warmups !== 'false' && lead.include_warmups !== '') ||
-        lead.design_notes ||
-        lead.message ||
-        lead.trello_product_list ||
-        lead.delivery_date
-      );
-      
-      // Strong evidence for Booking
-      const hasBookingEvidence = !!(
-        lead.booking_time ||
-        (lead.booking_approved && lead.booking_approved !== 'false' && lead.booking_approved !== '') ||
-        (lead.booking_data && typeof lead.booking_data === 'object' && lead.booking_data && Object.keys(lead.booking_data).length > 0) ||
-        lead.pre_call_notes
-      );
-      
-      // Strong evidence for Question
-      const hasQuestionEvidence = !!(
-        lead.question ||
-        (lead.question_data && typeof lead.question_data === 'object' && lead.question_data && Object.keys(lead.question_data).length > 0)
-      );
-      
-      if (hasQuoteEvidence) intents.push("Quote");
-      if (hasBookingEvidence) intents.push("Booking");
-      if (hasQuestionEvidence) intents.push("Question");
+      if (lead.delivery_date) intents.push("Quote");
+      if (lead.booking_time) intents.push("Booking");
+      if (lead.question) intents.push("Question");
     }
     
     // Ensure only canonical intents (no duplicates)
@@ -231,8 +184,6 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       phone: lead.phone,
       organization: lead.organization,
       status: lead.status || "new",
-      lead_type: lead.lead_type,
-      source: lead.source,
       sales_status: lead.sales_status,
       payment_status: lead.payment_status,
       production_stage: lead.production_stage,
@@ -248,52 +199,40 @@ async function getLeadsWithCount(): Promise<{ leads: Lead[]; count: number }> {
       last_modified: lead.last_modified,
       last_modified_by: lead.last_modified_by,
       last_activity_at: lead.last_activity_at || lead.updated_at || lead.created_at,
-      date_approved: lead.date_approved,
       delivery_date: lead.delivery_date,
-      date_delivered_collected: lead.date_delivered_collected,
-      date_completed: lead.date_completed,
-      category: lead.category,
-      product_type: lead.product_type,
-      accessories_selected: lead.accessories_selected,
-      include_warmups: lead.include_warmups,
-      quantity_range: lead.quantity_range,
-      has_deadline: lead.has_deadline,
-      message: lead.message,
-      design_notes: lead.design_notes,
-      attachments: lead.attachments,
-      trello_product_list: lead.trello_product_list,
       booking_time: lead.booking_time,
-      booking_approved: lead.booking_approved,
-      pre_call_notes: lead.pre_call_notes,
       question: lead.question,
-      question_data: lead.question_data,
-      quote_data: lead.quote_data,
-      booking_data: lead.booking_data,
       card_id: lead.card_id,
       card_created: lead.card_created,
     } as Lead;
   });
 
-  return { leads, count: count || leads.length };
+  return { leads, hasNextPage };
 }
 
 
-export default async function LeadsPage() {
-  const [{ leads, count }, reps, currentUserId, userRole] = await Promise.all([
-    getLeadsWithCount(),
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
+  const pageSize = 100;
+  const page = Math.max(1, Number(searchParams?.page || "1") || 1);
+
+  const [{ leads, hasNextPage }, reps, currentUserId, userRole] = await Promise.all([
+    getLeadsPage({ page, pageSize }),
     getUsersForAssignment(),
     getCurrentUserId(),
     getCurrentUserRole(),
   ]);
 
-  const totalCount = count || leads.length;
   const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        subtitle={`Manage and track your leads. (${totalCount} total)`}
+        subtitle={`Manage and track your leads. (Page ${page})`}
         actions={<RefreshButton />}
       />
       {leads.length === 0 ? (
@@ -313,7 +252,7 @@ export default async function LeadsPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Leads List ({leads.length} {totalCount !== leads.length ? `of ${totalCount}` : ''})
+              Leads List ({leads.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -323,6 +262,21 @@ export default async function LeadsPage() {
               currentUserId={currentUserId}
               isCeoOrAdmin={isCeoOrAdmin}
             />
+            <div className="mt-6 flex items-center justify-between gap-2">
+              <Button asChild variant="outline" disabled={page <= 1}>
+                <Link href={`/leads?page=${Math.max(1, page - 1)}`}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Prev
+                </Link>
+              </Button>
+              <div className="text-sm text-muted-foreground">Page {page}</div>
+              <Button asChild variant="outline" disabled={!hasNextPage}>
+                <Link href={`/leads?page=${page + 1}`}>
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
