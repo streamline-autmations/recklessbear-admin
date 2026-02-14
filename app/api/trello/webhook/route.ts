@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
     job_id: job.id,
     trello_card_id: cardId,
     trello_list_id: listAfterId,
+    stage: nextStage,
     from_stage: fromStage,
     to_stage: nextStage,
     moved_at: new Date().toISOString(),

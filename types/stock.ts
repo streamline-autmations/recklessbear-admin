@@ -60,6 +60,7 @@ export const PRODUCTION_STAGES = [
   "no_invoice_number",
   "orders",
   "supplier_orders",
+  "layouts_busy_michelle",
   "layouts_busy_colline",
   "layouts_busy_elzana",
   "awaiting_color_match",
@@ -78,3 +79,26 @@ export const PRODUCTION_STAGES = [
 ] as const;
 
 export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
+
+export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
+  orders_awaiting_confirmation: "Orders Awaiting Confirmation",
+  no_invoice_number: "No Invoice Number",
+  orders: "Orders",
+  supplier_orders: "Supplier Orders",
+  layouts_busy_michelle: "LAYOUTS BUSY (Michelle)",
+  layouts_busy_colline: "Layouts Busy (Colline)",
+  layouts_busy_elzana: "Layouts Busy (Elzana)",
+  awaiting_color_match: "AWAITING COLOR MATCH",
+  layouts_done_awaiting_approval: "LAYOUTS DONE (AWAITING BABY APPROVAL)",
+  layouts_received: "layouts received",
+  printing: "printing",
+  pressing: "pressing",
+  cmt: "CMT",
+  cleaning_packing: "Cleaning & Packing",
+  completed: "Completed",
+  full_payment_before_collection: "Full payment before collection",
+  full_payment_before_delivery: "Full payment before delivery",
+  ready_for_delivery_collection: "Ready for delivery/collection",
+  out_for_delivery: "Out for delivery",
+  delivered_collected: "Delivered/Collected",
+};

@@ -22,15 +22,15 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction, createTrelloCardAction } from "./actions";
+import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
-import { TrelloCreateButton } from "./trello-create-button";
 import { AttachmentGallery } from "./attachment-gallery";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, AlertCircle, CheckCircle2, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { ExternalLink, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw, Copy } from "lucide-react";
 import { assignToMeAction } from "../actions";
-import { getTrelloCardUrl } from "@/lib/trello";
+import { getTrelloCardUrl, TRELLO_LISTS } from "@/lib/trello";
+import { renderTrelloCardDescription } from "@/lib/trello-card-template";
 
 const leadDetailTabs = [
   { value: "overview", label: "Overview" },
@@ -95,6 +95,13 @@ interface LeadDetailClientProps {
   events: Event[];
   isCeoOrAdmin: boolean;
   reps: Rep[];
+  job?: {
+    id: string;
+    trello_card_id: string | null;
+    trello_card_url: string | null;
+    trello_list_id: string | null;
+    production_stage: string | null;
+  } | null;
 }
 
 export function LeadDetailClient({
@@ -105,6 +112,7 @@ export function LeadDetailClient({
   events,
   isCeoOrAdmin,
   reps,
+  job,
 }: LeadDetailClientProps) {
   const router = useRouter();
   const [noteText, setNoteText] = useState("");
@@ -125,6 +133,12 @@ export function LeadDetailClient({
   const [isBannerPending, startBannerTransition] = useTransition();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [trelloPreviewOpen, setTrelloPreviewOpen] = useState(false);
+  const [trelloJobId, setTrelloJobId] = useState("");
+  const [trelloCardTitle, setTrelloCardTitle] = useState("");
+  const [trelloTargetListId, setTrelloTargetListId] = useState<string>(TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION);
+  const [trelloProductList, setTrelloProductList] = useState("");
+  const [isCreatingTrello, setIsCreatingTrello] = useState(false);
   const defaultTabOrder = useMemo<LeadDetailTabValue[]>(() => leadDetailTabs.map((t) => t.value), []);
   const [activeTab, setActiveTab] = useState<LeadDetailTabValue>("overview");
   const [tabOrder, setTabOrder] = useState<LeadDetailTabValue[]>(defaultTabOrder);
@@ -859,22 +873,118 @@ export function LeadDetailClient({
     });
   }
 
-  function startProductionCreateTrello() {
+  function createUuidV4(): string {
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
+    const bytes = new Uint8Array(16);
+    cryptoObj?.getRandomValues?.(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  function buildCardTitle(): string {
+    const leadIdText = lead.lead_id;
+    const customerName = (lead.customer_name || lead.name || "").trim();
+    const org = (lead.organization || "").trim();
+    if (customerName && org) return `${customerName} — ${org} (${leadIdText})`;
+    if (customerName) return `${customerName} (${leadIdText})`;
+    return `Lead ${leadIdText}`;
+  }
+
+  function buildProductListPrefill(): string {
+    const selected = Array.isArray(lead.selected_apparel_items) ? lead.selected_apparel_items : null;
+    if (selected && selected.length > 0) {
+      return selected
+        .map((itemRaw) => {
+          const item = String(itemRaw || "").trim();
+          if (!item) return "";
+          return `${item} (STD)\n[Qty], [Size]`;
+        })
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    return (lead.trello_product_list || "").trim();
+  }
+
+  function openTrelloPreview() {
     if (!canUseDbActions()) {
       toast.error("Start Production is unavailable for this lead.");
       return;
     }
-    startBannerTransition(async () => {
-      const formData = new FormData();
-      formData.set("leadId", lead.id as string);
-      const result = await createTrelloCardAction(formData);
-      if (result && "error" in result) {
-        toast.error(result.error);
+    setTrelloJobId(createUuidV4());
+    setTrelloCardTitle(buildCardTitle());
+    setTrelloTargetListId(TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION);
+    setTrelloProductList(buildProductListPrefill());
+    setTrelloPreviewOpen(true);
+  }
+
+  const trelloDescriptionPreview = useMemo(() => {
+    const leadIdText = lead.lead_id;
+    const customerName = (lead.customer_name || lead.name || "").trim() || `Lead ${leadIdText}`;
+    const productList = trelloProductList.trim() || "Product Name (STD)\n[Qty], [Size]";
+    return renderTrelloCardDescription({
+      INVOICE_NUMBER: "[Enter Invoice # Here]",
+      PAYMENT_STATUS: lead.payment_status || "Pending",
+      JOB_ID: trelloJobId || "[JOB_ID]",
+      ORDER_QUANTITY: "[Enter Total Quantity]",
+      ORDER_DEADLINE: lead.delivery_date || "[Enter Deadline]",
+      PRODUCT_LIST: productList,
+      CUSTOMER_NAME: customerName,
+      PHONE: lead.phone || "[Enter Phone]",
+      EMAIL: lead.email || "[Enter Email]",
+      ORGANIZATION: lead.organization || "[Enter Organization]",
+      LOCATION: "[Enter Location]",
+      DESIGN_NOTES: lead.design_notes || "[Add any final design notes here]",
+      LEAD_ID: leadIdText,
+      INVOICE_MACHINE: "",
+      ORDER_QUANTITY_MACHINE: "",
+      ORDER_DEADLINE_MACHINE: lead.delivery_date || "",
+    });
+  }, [lead, trelloJobId, trelloProductList]);
+
+  async function copyProductList() {
+    try {
+      await navigator.clipboard.writeText(trelloProductList);
+      toast.success("Copied product list");
+    } catch {
+      toast.error("Copy failed");
+    }
+  }
+
+  async function createTrelloCard() {
+    if (!canUseDbActions()) return;
+    if (!trelloProductList.trim()) return;
+
+    setIsCreatingTrello(true);
+    try {
+      const res = await fetch("/api/n8n/card-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId,
+          jobId: trelloJobId,
+          card_title: trelloCardTitle,
+          card_description: trelloDescriptionPreview,
+          target_list_id: trelloTargetListId,
+          product_list: trelloProductList,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detailsText = json?.details ? `: ${typeof json.details === "string" ? json.details : JSON.stringify(json.details)}` : "";
+        toast.error((json?.error || "Failed to send to workflow") + detailsText);
         return;
       }
-      toast.success("Production started");
+
+      toast.success("Sent to workflow");
+      setTrelloPreviewOpen(false);
       router.refresh();
-    });
+    } finally {
+      setIsCreatingTrello(false);
+    }
   }
 
   function assignLeadToMe() {
@@ -924,6 +1034,72 @@ export function LeadDetailClient({
             </Button>
             <Button type="button" onClick={submitBannerNote} disabled={!bannerNote.trim() || isBannerPending} className="min-h-[44px]">
               {isBannerPending ? "Saving..." : "Save Note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={trelloPreviewOpen} onOpenChange={setTrelloPreviewOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Preview Trello Card</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Card Title</Label>
+              <Input value={trelloCardTitle} onChange={(e) => setTrelloCardTitle(e.target.value)} className="min-h-[44px]" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Target List</Label>
+              {isCeoOrAdmin ? (
+                <Select value={trelloTargetListId} onValueChange={setTrelloTargetListId}>
+                  <SelectTrigger className="min-h-[44px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION}>Orders Awaiting confirmation</SelectItem>
+                    <SelectItem value={TRELLO_LISTS.ORDERS}>Orders</SelectItem>
+                    <SelectItem value={TRELLO_LISTS.SUPPLIER_ORDERS}>Supplier Orders</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value="Orders Awaiting confirmation" disabled className="min-h-[44px]" />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Product List</Label>
+                <Button type="button" variant="outline" size="sm" className="h-9 gap-2" onClick={copyProductList} disabled={!trelloProductList.trim()}>
+                  <Copy className="h-4 w-4" />
+                  Copy Product List
+                </Button>
+              </div>
+              <Textarea
+                value={trelloProductList}
+                onChange={(e) => setTrelloProductList(e.target.value)}
+                className="min-h-[140px]"
+                placeholder="Paste or type the product list here. Use the same formatting as the template. This is required before creating the card."
+              />
+              {!trelloProductList.trim() && (
+                <p className="text-sm text-muted-foreground">Product list is required before you can create the Trello card.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Card Description (Preview)</Label>
+              <Textarea value={trelloDescriptionPreview} readOnly className="min-h-[280px]" />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setTrelloPreviewOpen(false)} className="min-h-[44px]" disabled={isCreatingTrello}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={createTrelloCard} className="min-h-[44px]" disabled={isCreatingTrello || !trelloProductList.trim()}>
+              {isCreatingTrello ? "Sending..." : "Send to Workflow"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -997,8 +1173,8 @@ export function LeadDetailClient({
             {bannerState.kind === "ready_for_production" && (
               <>
                 {isCeoOrAdmin ? (
-                  <Button type="button" className="min-h-[44px]" onClick={startProductionCreateTrello} disabled={isBannerPending}>
-                    {isBannerPending ? "Starting..." : "Start Production (Create Trello Card)"}
+                  <Button type="button" className="min-h-[44px]" onClick={openTrelloPreview}>
+                    Preview Trello Card
                   </Button>
                 ) : (
                   <Button type="button" className="min-h-[44px]" disabled>
@@ -1343,40 +1519,55 @@ export function LeadDetailClient({
                 <CardTitle className="text-base">Production Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {lead.sales_status === "Quote Approved" || lead.card_id ? (
-                  <>
-                     <div>
-                      <p className="text-sm font-medium mb-1">Production Stage</p>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-2 w-2 rounded-full bg-green-500"></span>
-                        <p className="text-sm text-foreground">{lead.production_stage || "Ready for Production"}</p>
+                {(() => {
+                  const cardId = lead.card_id || job?.trello_card_id || null;
+                  const trelloUrl = job?.trello_card_url || (cardId ? getTrelloCardUrl(cardId) : null);
+                  const isQuoteApproved = (lead.sales_status || lead.status || "").trim() === "Quote Approved";
+                  const canPreview = isQuoteApproved && !cardId;
+
+                  if (cardId) {
+                    return (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium mb-1">Production Stage</p>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-2 w-2 rounded-full bg-green-500"></span>
+                            <p className="text-sm text-foreground">{lead.production_stage || job?.production_stage || "Orders Awaiting confirmation"}</p>
+                          </div>
+                        </div>
+                        <div className="grid gap-2">
+                          <Button variant="outline" asChild className="min-h-[44px] gap-2 w-full justify-start">
+                            <a href={trelloUrl || "#"} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                              Open in Trello
+                            </a>
+                          </Button>
+                          {job?.id && (
+                            <Button variant="outline" asChild className="min-h-[44px] w-full justify-start">
+                              <a href={`/jobs/${job.id}`}>View Job</a>
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {lead.card_id ? (
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
                       <div>
-                         <p className="text-sm font-medium mb-1">Trello Card</p>
-                         <Button variant="outline" size="sm" asChild className="h-8 gap-2 w-full justify-start">
-                           <a href={`https://trello.com/c/${lead.card_id}`} target="_blank" rel="noopener noreferrer">
-                             <ExternalLink className="h-3 w-3" />
-                             Open Card
-                           </a>
-                         </Button>
+                        <p className="text-sm font-medium mb-1">Start Production</p>
+                        {!isQuoteApproved ? (
+                          <p className="text-sm text-muted-foreground">Set Quote Approved to start production.</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Preview the Trello card before creating it.</p>
+                        )}
                       </div>
-                    ) : (
-                      <div className="p-3 bg-muted/50 rounded-lg border border-dashed">
-                        <p className="text-xs text-muted-foreground mb-2">Job approved but no Trello card.</p>
-                        <TrelloCreateButton leadId={leadId} leadName={lead.customer_name || lead.name || null} />
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[160px] text-center p-4 bg-muted/20 rounded-lg border border-dashed">
-                    <p className="text-sm font-medium text-muted-foreground">Not in Production</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Approve Quote to start job.
-                    </p>
-                  </div>
-                )}
+                      <Button type="button" className="min-h-[44px] w-full" onClick={openTrelloPreview} disabled={!canPreview}>
+                        Preview Trello Card
+                      </Button>
+                    </div>
+                  );
+                })()}
                 
                 {(lead.delivery_date || lead.date_completed) && (
                   <>
@@ -1392,37 +1583,6 @@ export function LeadDetailClient({
               </CardContent>
             </Card>
           </div>
-          
-          {/* Convert to Job Section (Phase 3 Prep) */}
-          <Card className="mt-6 border-l-4 border-l-primary/20">
-             <CardContent className="pt-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      Job Status
-                      {lead.sales_status === "Quote Approved" ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {lead.sales_status === "Quote Approved" 
-                        ? "This lead has been approved and is ready for production tracking."
-                        : "Update status to 'Quote Approved' to convert this lead into a production job."}
-                    </p>
-                  </div>
-                  {lead.sales_status !== "Quote Approved" && (
-                     <Button 
-                       onClick={() => handleStatusChange("Quote Approved")}
-                       disabled={isStatusPending}
-                     >
-                       Approve Quote & Create Job
-                     </Button>
-                  )}
-                </div>
-             </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Quote / Products Tab */}

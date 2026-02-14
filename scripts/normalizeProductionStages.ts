@@ -17,10 +17,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 const CANONICAL = new Set<string>([
   "orders_awaiting_confirmation",
+  "layouts_busy_michelle",
   "layouts_busy_colline",
   "layouts_busy_elzana",
   "awaiting_color_match",
   "layouts_done_awaiting_approval",
+  "layouts_received",
+  "orders",
+  "supplier_orders",
+  "no_invoice_number",
   "printing",
   "pressing",
   "cmt",
@@ -51,6 +56,7 @@ function normalizeStage(stage: string | null | undefined): string {
 
   const map: Record<string, string> = {
     layouts_busy: "layouts_busy_colline",
+    layouts_busy_michelle: "layouts_busy_michelle",
     layouts_received: "layouts_done_awaiting_approval",
     orders: "orders_awaiting_confirmation",
     supplier_orders: "orders_awaiting_confirmation",

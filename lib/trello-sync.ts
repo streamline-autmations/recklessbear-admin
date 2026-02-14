@@ -164,6 +164,7 @@ export async function ensureJobAndTrelloCardForLead(params: {
     job_id: job.id,
     trello_card_id: trelloResult.id,
     trello_list_id: trelloResult.listId,
+    stage: productionStage,
     from_stage: null,
     to_stage: productionStage,
     moved_at: new Date().toISOString(),

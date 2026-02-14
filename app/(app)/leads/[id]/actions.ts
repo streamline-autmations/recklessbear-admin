@@ -239,36 +239,6 @@ export async function changeStatusAction(
   const oldStatus = currentLead.status;
   const newStatus = result.data.status;
   
-  if (newStatus === "Quote Approved") {
-    if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
-      return { error: "Unauthorized: Only CEO/Admin can start production" };
-    }
-
-    const ensured = await ensureJobAndTrelloCardForLead({
-      supabase,
-      leadDbId: result.data.leadId,
-      actorUserId: user.id,
-      actorEmail: user.email,
-      actorProfile: profile,
-    });
-
-    if (ensured.ok === false) {
-      return { error: ensured.error };
-    }
-
-    await supabase.from("lead_events").insert({
-      lead_db_id: result.data.leadId,
-      actor_user_id: user.id,
-      event_type: "status_changed",
-      payload: { from: oldStatus, to: newStatus },
-    });
-
-    revalidatePath(`/leads/${ensured.leadId}`);
-    revalidatePath("/jobs");
-    revalidatePath("/leads");
-    return;
-  }
-
   const { error: updateError } = await supabase
     .from("leads")
     .update({

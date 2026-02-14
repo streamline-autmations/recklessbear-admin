@@ -1,61 +1,19 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createClient } from '@/lib/supabase/server';
-import { JobsTableClient } from './jobs-table-client';
-import type { Lead } from '@/types/leads';
-import { RefreshButton } from '../leads/refresh-button';
-import { PageHeader } from '@/components/page-header';
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
+import type { Lead } from "@/types/leads";
+import { RefreshButton } from "../leads/refresh-button";
+import { PageHeader } from "@/components/page-header";
+import { JobsBoardClient } from "./jobs-board-client";
 
 // Force dynamic rendering to always fetch latest data
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-interface Rep {
-  id: string;
-  name: string | null;
-  email?: string | null;
-}
-
-/**
- * Get users for assignment (from profiles table)
- */
-async function getUsersForAssignment(): Promise<Rep[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, full_name, email")
-    .order("full_name", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching users for assignment:", error);
-    return [];
-  }
-
-  return (data || []).map((user) => ({
-    id: user.user_id,
-    name: user.full_name,
-    email: user.email || null,
-  }));
-}
-
-async function getCurrentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
-}
-
-async function getJobsPage(params: { page: number; pageSize: number }): Promise<{ leads: Lead[]; hasNextPage: boolean }> {
+async function getJobsBoardLeads(): Promise<Lead[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { leads: [], hasNextPage: false };
-  }
-
-  const start = Math.max(0, (params.page - 1) * params.pageSize);
-  const endInclusive = start + params.pageSize;
+  if (!user) return [];
 
   const query = supabase
     .from('leads')
@@ -85,21 +43,17 @@ async function getJobsPage(params: { page: number; pageSize: number }): Promise<
     // Filter for jobs: sales_status is Quote Approved OR card_created is true OR production_stage is set
     .or('sales_status.eq.Quote Approved,sales_status.eq.In Production,sales_status.eq.Completed,card_created.eq.true,production_stage.neq.null')
     .order('updated_at', { ascending: false, nullsFirst: false })
-    .range(start, endInclusive)
+    .limit(2000)
   
   const { data: leadsData, error } = await query;
 
   if (error) {
     console.error('Error fetching jobs from Supabase:', error);
-    return { leads: [], hasNextPage: false };
+    return [];
   }
 
-  const rows = leadsData || [];
-  const hasNextPage = rows.length > params.pageSize;
-  const pageRows = hasNextPage ? rows.slice(0, params.pageSize) : rows;
-
   // Transform Supabase data to Lead format
-  const leads = (pageRows || []).map((lead) => {
+  const leads = (leadsData || []).map((lead) => {
     return {
       id: lead.id,
       lead_id: lead.lead_id,
@@ -126,7 +80,7 @@ async function getJobsPage(params: { page: number; pageSize: number }): Promise<
     } as Lead;
   });
 
-  return { leads, hasNextPage };
+  return leads;
 }
 
 
@@ -135,20 +89,13 @@ export default async function JobsPage({
 }: {
   searchParams?: { page?: string };
 }) {
-  const pageSize = 100;
-  const page = Math.max(1, Number(searchParams?.page || "1") || 1);
-
-  const [{ leads, hasNextPage }, reps, currentUserId] = await Promise.all([
-    getJobsPage({ page, pageSize }),
-    getUsersForAssignment(),
-    getCurrentUserId(),
-  ]);
+  const leads = await getJobsBoardLeads();
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Jobs"
-        subtitle={`Track production jobs and orders. (Page ${page})`}
+        subtitle="Track production jobs and orders."
         actions={<RefreshButton />}
       />
       {leads.length === 0 ? (
@@ -163,25 +110,10 @@ export default async function JobsPage({
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Production Queue</CardTitle>
+            <CardTitle>Production Board</CardTitle>
           </CardHeader>
           <CardContent>
-            <JobsTableClient initialLeads={leads} reps={reps} currentUserId={currentUserId} />
-            <div className="mt-6 flex items-center justify-between gap-2">
-              <Button asChild variant="outline" disabled={page <= 1}>
-                <Link href={`/jobs?page=${Math.max(1, page - 1)}`}>
-                  <ChevronLeft className="h-4 w-4" />
-                  Prev
-                </Link>
-              </Button>
-              <div className="text-sm text-muted-foreground">Page {page}</div>
-              <Button asChild variant="outline" disabled={!hasNextPage}>
-                <Link href={`/jobs?page=${page + 1}`}>
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+            <JobsBoardClient initialLeads={leads} />
           </CardContent>
         </Card>
       )}

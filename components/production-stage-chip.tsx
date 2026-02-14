@@ -1,11 +1,12 @@
  "use client";
  
  import { cn } from "@/lib/utils";
- import { PRODUCTION_STAGES } from "@/types/stock";
+import { PRODUCTION_STAGE_LABELS } from "@/types/stock";
  
  const stageClasses: Record<string, string> = {
    orders_awaiting_confirmation: "border-amber-500/30 bg-amber-500/15 text-amber-200",
    layouts_busy: "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-200",
+  layouts_busy_michelle: "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-200",
    layouts_busy_colline: "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-200",
    layouts_busy_elzana: "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-200",
    awaiting_color_match: "border-sky-500/30 bg-sky-500/15 text-sky-200",
@@ -17,14 +18,24 @@
    ready_for_delivery_collection: "border-orange-500/30 bg-orange-500/15 text-orange-200",
    delivered_collected: "border-green-500/30 bg-green-500/15 text-green-200",
  };
+
+function toKey(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
  
  function getStageLabel(stage: string | null | undefined) {
    if (!stage) return "—";
-   const key = stage.toLowerCase();
-  if (key === "layouts_busy_colline" || key === "layouts_busy_elzana" || key === "layouts_busy") {
-    return "Layouts Busy";
+  const key = toKey(stage);
+  if (key in PRODUCTION_STAGE_LABELS) {
+    return PRODUCTION_STAGE_LABELS[key as keyof typeof PRODUCTION_STAGE_LABELS];
   }
-   return PRODUCTION_STAGES[key] || stage;
+  return stage;
  }
  
  export function ProductionStageChip({
@@ -34,7 +45,7 @@
    stage: string | null | undefined;
    className?: string;
  }) {
-   const key = (stage || "").toLowerCase();
+  const key = toKey(stage || "");
    const tone = stageClasses[key] || "border-border bg-muted text-foreground";
  
    return (

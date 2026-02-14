@@ -81,32 +81,7 @@ async function getUsersForAssignment(): Promise<Rep[]> {
  * Tries spreadsheet first, then falls back to Supabase
  */
 async function getLead(id: string): Promise<Lead | null> {
-  // Try loading from spreadsheet first (search by lead_id)
-  try {
-    const spreadsheetLeads = await loadLeadsFromSpreadsheet();
-    if (spreadsheetLeads.length > 0) {
-      // Search by lead_id first (most common case)
-      let lead = spreadsheetLeads.find((l) => l.lead_id === id);
-      
-      // If not found, try searching by any field that might match (id, name, etc.)
-      if (!lead) {
-        lead = spreadsheetLeads.find(
-          (l) => 
-            (l.id && String(l.id) === id) ||
-            (l.name && String(l.name).toLowerCase() === id.toLowerCase())
-        );
-      }
-      
-      if (lead) {
-        console.log(`[lead-detail] Found lead in spreadsheet: ${lead.lead_id}`);
-        return lead;
-      }
-    }
-  } catch (error) {
-    console.error("[lead-detail] Error loading from spreadsheet, trying Supabase:", error);
-  }
-
-  // Fallback to Supabase (try by UUID or lead_id)
+  // Prefer Supabase (needed for status updates + Trello/job creation)
   const supabase = await createClient();
 
   // Select all required fields
@@ -201,6 +176,26 @@ async function getLead(id: string): Promise<Lead | null> {
   }
 
   if (error || !data) {
+    // Final fallback: spreadsheet (read-only view)
+    try {
+      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+      if (spreadsheetLeads.length > 0) {
+        let lead = spreadsheetLeads.find((l) => l.lead_id === id);
+        if (!lead) {
+          lead = spreadsheetLeads.find(
+            (l) =>
+              (l.id && String(l.id) === id) ||
+              (l.name && String(l.name).toLowerCase() === id.toLowerCase())
+          );
+        }
+        if (lead) {
+          console.log(`[lead-detail] Found lead in spreadsheet (no DB row): ${lead.lead_id}`);
+          return lead;
+        }
+      }
+    } catch (spreadsheetError) {
+      console.error("[lead-detail] Error loading from spreadsheet:", spreadsheetError);
+    }
     return null;
   }
 
@@ -399,6 +394,29 @@ async function getEvents(leadId: string): Promise<Event[]> {
   return data || [];
 }
 
+type JobSummary = {
+  id: string;
+  trello_card_id: string | null;
+  trello_card_url: string | null;
+  trello_list_id: string | null;
+  production_stage: string | null;
+};
+
+async function getJobForLead(lead: Lead): Promise<JobSummary | null> {
+  const supabase = await createClient();
+  const baseSelect = "id, trello_card_id, trello_card_url, trello_list_id, production_stage";
+
+  const { data: byText, error: byTextError } = await supabase.from("jobs").select(baseSelect).eq("lead_id", lead.lead_id).maybeSingle();
+  if (!byTextError && byText) return byText as unknown as JobSummary;
+
+  if (lead.id) {
+    const { data: byUuid, error: byUuidError } = await supabase.from("jobs").select(baseSelect).eq("lead_id", lead.id).maybeSingle();
+    if (!byUuidError && byUuid) return byUuid as unknown as JobSummary;
+  }
+
+  return null;
+}
+
 export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const { id } = await params;
 
@@ -414,11 +432,12 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
   const leadDbId = isUuid ? lead.id : null;
 
-  const [notes, events, userRole, reps] = await Promise.all([
+  const [notes, events, userRole, reps, job] = await Promise.all([
     leadDbId ? getNotes(leadDbId) : Promise.resolve([]),
     leadDbId ? getEvents(leadDbId) : Promise.resolve([]),
     getCurrentUserRole(),
     getUsersForAssignment(),
+    getJobForLead(lead),
   ]);
 
   const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
@@ -475,6 +494,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         events={events}
         isCeoOrAdmin={isCeoOrAdmin}
         reps={reps}
+        job={job}
       />
     </div>
   );
