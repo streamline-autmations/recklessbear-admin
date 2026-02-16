@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
-import Script from "next/script";
-import { ConvocoreWidgetControls } from "@/components/convocore-widget-controls";
 
 export const metadata: Metadata = {
   title: "RecklessBear Admin",
@@ -28,32 +26,6 @@ export default function RootLayout({
           {children}
           <Toaster />
         </ThemeProvider>
-        <div
-          id="VG_OVERLAY_CONTAINER"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2147483000,
-            pointerEvents: "none",
-          }}
-        />
-        <ConvocoreWidgetControls />
-        <Script id="convocore-config" strategy="afterInteractive">
-          {`
-(function () {
-  window.VG_CONFIG = {
-    ID: "NPxTEjBmmvt9M9OAh0s0",
-    region: "na",
-    render: "bottom-right",
-    stylesheets: ["https://vg-bunny-cdn.b-cdn.net/vg_live_build/styles.css"],
-  };
-})();
-          `}
-        </Script>
-        <Script
-          src="https://vg-bunny-cdn.b-cdn.net/vg_live_build/vg_bundle.js"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

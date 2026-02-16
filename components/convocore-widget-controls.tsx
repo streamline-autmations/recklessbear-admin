@@ -65,8 +65,31 @@ function clampPos(pos: WidgetPos): WidgetPos {
   };
 }
 
+function pickBestFixedCandidate(candidates: HTMLElement[]): HTMLElement | null {
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  if (!vw || !vh) return candidates[0] || null;
+
+  let best: { el: HTMLElement; score: number } | null = null;
+
+  for (const el of candidates) {
+    const rect = el.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 40 || h < 40) continue;
+    if (w >= vw * 0.92 && h >= vh * 0.92) continue;
+
+    const area = w * h;
+    if (!best || area < best.score) best = { el, score: area };
+  }
+
+  return best?.el || null;
+}
+
 function findMovableRoot(container: HTMLElement): HTMLElement | null {
   const stack: HTMLElement[] = [container];
+  const fixedCandidates: HTMLElement[] = [];
   let guard = 0;
 
   while (stack.length && guard < 4000) {
@@ -75,12 +98,15 @@ function findMovableRoot(container: HTMLElement): HTMLElement | null {
     if (el.id === "rb-vg-controls" || el.id === "rb-vg-reopen") continue;
 
     const style = window.getComputedStyle(el);
-    if (style.position === "fixed") return el;
+    if (style.position === "fixed") fixedCandidates.push(el);
 
     for (const child of Array.from(el.children)) {
       if (child instanceof HTMLElement) stack.push(child);
     }
   }
+
+  const best = pickBestFixedCandidate(fixedCandidates);
+  if (best) return best;
 
   return container.firstElementChild instanceof HTMLElement ? container.firstElementChild : null;
 }

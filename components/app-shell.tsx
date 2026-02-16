@@ -19,6 +19,7 @@ import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
+import { ConvocoreWidget } from "@/components/convocore-widget";
 
 const OnboardingTour = dynamic(() => import("@/components/onboarding-tour").then((m) => m.OnboardingTour), {
   ssr: false,
@@ -159,6 +160,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   return (
     <div className="min-h-screen text-foreground flex">
       <OnboardingTour />
+      <ConvocoreWidget />
       <aside
         className={`hidden md:flex border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] p-4 flex-shrink-0 transition-[width] duration-200 ${
           isDesktopCollapsed ? "w-[92px] p-3" : "w-64 p-4"
