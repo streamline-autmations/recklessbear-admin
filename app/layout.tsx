@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import Script from "next/script";
+import { ConvocoreWidgetControls } from "@/components/convocore-widget-controls";
 
 export const metadata: Metadata = {
   title: "RecklessBear Admin",
@@ -28,6 +29,7 @@ export default function RootLayout({
           <Toaster />
         </ThemeProvider>
         <div id="VG_OVERLAY_CONTAINER" style={{ width: 0, height: 0 }} />
+        <ConvocoreWidgetControls />
         <Script id="convocore-config" strategy="afterInteractive">
           {`
 (function () {

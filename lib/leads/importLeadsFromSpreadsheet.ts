@@ -12,6 +12,21 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const CSV_FILE = path.join(DATA_DIR, "leads.csv");
 const XLSX_FILE = path.join(DATA_DIR, "leads.xlsx");
 
+let spreadsheetCache: {
+  filePath: string;
+  mtimeMs: number;
+  leads: Lead[];
+} | null = null;
+
+async function getMtimeMs(filePath: string): Promise<number> {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Normalize column names to consistent format
  */
@@ -334,12 +349,21 @@ export async function loadLeadsFromSpreadsheet(): Promise<Lead[]> {
       return [];
     }
 
+    const mtimeMs = await getMtimeMs(filePath);
+    if (spreadsheetCache && spreadsheetCache.filePath === filePath && spreadsheetCache.mtimeMs === mtimeMs) {
+      return spreadsheetCache.leads;
+    }
+
     console.log(`[leads-import] Loading leads from ${fileType.toUpperCase()} file: ${filePath}`);
 
     if (fileType === "xlsx") {
-      return await parseXLSX(filePath);
+      const leads = await parseXLSX(filePath);
+      spreadsheetCache = { filePath, mtimeMs, leads };
+      return leads;
     } else {
-      return await parseCSV(filePath);
+      const leads = await parseCSV(filePath);
+      spreadsheetCache = { filePath, mtimeMs, leads };
+      return leads;
     }
   } catch (error) {
     console.error("[leads-import] Error loading spreadsheet:", error);

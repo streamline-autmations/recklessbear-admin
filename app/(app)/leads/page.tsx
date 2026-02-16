@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createClient } from '@/lib/supabase/server';
 import { LeadsTableClient } from './leads-table-client';
 import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet';
 import type { Lead } from '@/types/leads';
@@ -8,10 +7,10 @@ import { PageHeader } from '@/components/page-header';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getViewer } from "@/lib/viewer";
+import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 
-// Force dynamic rendering to always fetch latest data
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 10;
 
 interface Rep {
   id: string;
@@ -19,11 +18,12 @@ interface Rep {
   email?: string | null;
 }
 
+type ServerSupabaseClient = Awaited<ReturnType<typeof createSupabaseClient>>;
+
 /**
  * Get users for assignment (from profiles table)
  */
-async function getUsersForAssignment(): Promise<Rep[]> {
-  const supabase = await createClient();
+async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Rep[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select("user_id, full_name, email")
@@ -41,41 +41,21 @@ async function getUsersForAssignment(): Promise<Rep[]> {
   }));
 }
 
-async function getCurrentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
-}
-
-async function getCurrentUserRole(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  return data?.role || null;
-}
-
 async function getLeadsPage(params: { page: number; pageSize: number }): Promise<{ leads: Lead[]; hasNextPage: boolean }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getViewer();
+  const allowSpreadsheetFallback = process.env.NODE_ENV !== "production";
 
   if (!user) {
     console.error('Authentication error: missing user session');
-    // Fallback to spreadsheet if not authenticated
-    try {
-      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
-      if (spreadsheetLeads.length > 0) {
-        console.log(`[leads-page] Not authenticated, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-        return { leads: spreadsheetLeads, hasNextPage: false };
+    if (allowSpreadsheetFallback) {
+      try {
+        const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+        if (spreadsheetLeads.length > 0) {
+          console.log(`[leads-page] Not authenticated, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+          return { leads: spreadsheetLeads, hasNextPage: false };
+        }
+      } catch {
       }
-    } catch {
-      // Ignore spreadsheet errors if auth fails
     }
     return { leads: [], hasNextPage: false };
   }
@@ -126,15 +106,16 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
       hint: error.hint,
       code: error.code,
     });
-    // Fallback to spreadsheet on error
-    try {
-      const spreadsheetLeads = await loadLeadsFromSpreadsheet();
-      if (spreadsheetLeads.length > 0) {
-        console.log(`[leads-page] Supabase error, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-        return { leads: spreadsheetLeads, hasNextPage: false };
+    if (allowSpreadsheetFallback) {
+      try {
+        const spreadsheetLeads = await loadLeadsFromSpreadsheet();
+        if (spreadsheetLeads.length > 0) {
+          console.log(`[leads-page] Supabase error, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
+          return { leads: spreadsheetLeads, hasNextPage: false };
+        }
+      } catch (spreadsheetError) {
+        console.error("[leads-page] Spreadsheet fallback also failed:", spreadsheetError);
       }
-    } catch (spreadsheetError) {
-      console.error("[leads-page] Spreadsheet fallback also failed:", spreadsheetError);
     }
     return { leads: [], hasNextPage: false };
   }
@@ -143,8 +124,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
   const hasNextPage = rows.length > params.pageSize;
   const pageRows = hasNextPage ? rows.slice(0, params.pageSize) : rows;
 
-  // If Supabase returns empty, fallback to spreadsheet (dev mode)
-  if ((!pageRows || pageRows.length === 0)) {
+  if (allowSpreadsheetFallback && (!pageRows || pageRows.length === 0)) {
     try {
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
       if (spreadsheetLeads.length > 0) {
@@ -152,7 +132,6 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
         return { leads: spreadsheetLeads, hasNextPage: false };
       }
     } catch {
-      // Ignore spreadsheet errors if Supabase is just empty
     }
   }
 
@@ -216,14 +195,13 @@ export default async function LeadsPage({
 }: {
   searchParams?: { page?: string };
 }) {
+  const { supabase, user, userRole } = await getViewer();
   const pageSize = 100;
   const page = Math.max(1, Number(searchParams?.page || "1") || 1);
 
-  const [{ leads, hasNextPage }, reps, currentUserId, userRole] = await Promise.all([
+  const [{ leads, hasNextPage }, reps] = await Promise.all([
     getLeadsPage({ page, pageSize }),
-    getUsersForAssignment(),
-    getCurrentUserId(),
-    getCurrentUserRole(),
+    getUsersForAssignment(supabase),
   ]);
 
   const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
@@ -259,7 +237,7 @@ export default async function LeadsPage({
             <LeadsTableClient
               initialLeads={leads}
               reps={reps}
-              currentUserId={currentUserId}
+              currentUserId={user?.id || undefined}
               isCeoOrAdmin={isCeoOrAdmin}
             />
             <div className="mt-6 flex items-center justify-between gap-2">

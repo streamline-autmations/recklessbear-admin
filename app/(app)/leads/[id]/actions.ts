@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { ensureJobAndTrelloCardForLead } from "@/lib/trello-sync";
+import { randomUUID } from "crypto";
+import { TRELLO_LISTS } from "@/lib/trello";
+import { renderTrelloCardDescription } from "@/lib/trello-card-template";
 
 const addNoteSchema = z.object({
   leadId: z.string().uuid(),
@@ -520,7 +522,7 @@ export async function updateLeadFieldsAction(
 
 export async function createTrelloCardAction(
   formData: FormData
-): Promise<{ error?: string } | void> {
+): Promise<{ error?: string; message?: string } | void> {
   const rawFormData = {
     leadId: formData.get("leadId") as string,
   };
@@ -553,21 +555,182 @@ export async function createTrelloCardAction(
     return { error: "Unauthorized: Only CEO/Admin can create Trello cards" };
   }
 
-  const ensured = await ensureJobAndTrelloCardForLead({
-    supabase,
-    leadDbId: result.data.leadId,
-    actorUserId: user.id,
-    actorEmail: user.email,
-    actorProfile: profile,
-  });
+  const leadSelect =
+    "id, lead_id, customer_name, name, email, phone, organization, status, sales_status, payment_status, production_stage, delivery_date, design_notes, trello_product_list, selected_apparel_items, card_id, card_created";
 
-  if (ensured.ok === false) {
-    return { error: ensured.error };
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select(leadSelect)
+    .eq("id", result.data.leadId)
+    .single();
+
+  if (leadError || !lead) {
+    return { error: "Lead not found" };
   }
 
-  revalidatePath(`/leads/${ensured.leadId}`);
+  const salesStatus = String(lead.sales_status || lead.status || "").trim();
+  if (salesStatus !== "Quote Approved") {
+    return { error: "Lead is not Quote Approved" };
+  }
+
+  const { data: existingJob } = await supabase
+    .from("jobs")
+    .select("id, trello_card_id")
+    .eq("lead_id", lead.lead_id)
+    .maybeSingle();
+
+  if (existingJob?.trello_card_id || lead.card_id) {
+    return { message: "Trello card already created" };
+  }
+
+  const jobId = existingJob?.id || randomUUID();
+
+  if (!existingJob?.id) {
+    const { error: jobInsertError } = await supabase.from("jobs").insert({ id: jobId, lead_id: lead.lead_id });
+    if (jobInsertError) {
+      return { error: "Failed to create job" };
+    }
+  }
+
+  const selected = Array.isArray(lead.selected_apparel_items) ? lead.selected_apparel_items : null;
+  const productList =
+    selected && selected.length > 0
+      ? selected
+          .map((itemRaw) => {
+            const item = String(itemRaw || "").trim();
+            if (!item) return "";
+            return `${item} (STD)\n[Qty], [Size]`;
+          })
+          .filter(Boolean)
+          .join("\n\n")
+      : String(lead.trello_product_list || "").trim();
+
+  const leadIdText = String(lead.lead_id || "").trim();
+  const customerName = String(lead.customer_name || lead.name || "").trim();
+  const org = String(lead.organization || "").trim();
+  const cardTitle = customerName && org ? `${customerName} — ${org} (${leadIdText})` : customerName ? `${customerName} (${leadIdText})` : `Lead ${leadIdText}`;
+
+  const cardDescription = renderTrelloCardDescription({
+    INVOICE_NUMBER: "[Enter Invoice # Here]",
+    PAYMENT_STATUS: String(lead.payment_status || "Pending"),
+    JOB_ID: jobId,
+    ORDER_QUANTITY: "[Enter Total Quantity]",
+    ORDER_DEADLINE: String(lead.delivery_date || "[Enter Deadline]"),
+    PRODUCT_LIST: productList || "Product Name (STD)\n[Qty], [Size]",
+    CUSTOMER_NAME: customerName || `Lead ${leadIdText}`,
+    PHONE: String(lead.phone || "[Enter Phone]"),
+    EMAIL: String(lead.email || "[Enter Email]"),
+    ORGANIZATION: org || "[Enter Organization]",
+    LOCATION: "[Enter Location]",
+    DESIGN_NOTES: String(lead.design_notes || "[Add any final design notes here]"),
+    LEAD_ID: leadIdText,
+    INVOICE_MACHINE: "",
+    ORDER_QUANTITY_MACHINE: "",
+    ORDER_DEADLINE_MACHINE: String(lead.delivery_date || ""),
+  });
+
+  const webhookUrl = process.env.N8N_CARD_CREATE_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/card-create";
+
+  const payload = {
+    source: "recklessbear-admin",
+    type: "card-create",
+    requested_at: new Date().toISOString(),
+    actor_user_id: user.id,
+    lead: {
+      id: lead.id,
+      lead_id: lead.lead_id,
+      customer_name: lead.customer_name,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      organization: lead.organization,
+      status: lead.status,
+      sales_status: lead.sales_status,
+      payment_status: lead.payment_status,
+      production_stage: lead.production_stage,
+      delivery_date: lead.delivery_date,
+      design_notes: lead.design_notes,
+      trello_product_list: lead.trello_product_list,
+      selected_apparel_items: lead.selected_apparel_items,
+      card_id: lead.card_id,
+      card_created: lead.card_created,
+    },
+    card: {
+      job_id: jobId,
+      card_title: cardTitle,
+      target_list_id: TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION,
+      product_list: productList,
+      card_description: cardDescription,
+    },
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  const responseText = await response.text().catch(() => "");
+  let responseJson: unknown = null;
+  try {
+    responseJson = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    responseJson = null;
+  }
+
+  if (!response.ok) {
+    return { error: `n8n webhook error (${response.status})` };
+  }
+
+  const obj = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : null;
+  const pickString = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const trelloCardId = pickString(obj?.trello_card_id) || pickString(obj?.card_id) || pickString(obj?.cardId) || pickString(obj?.id) || null;
+  const trelloCardUrl = pickString(obj?.trello_card_url) || pickString(obj?.card_url) || pickString(obj?.url) || pickString(obj?.shortUrl) || null;
+
+  await supabase.from("jobs").upsert(
+    {
+      id: jobId,
+      lead_id: lead.lead_id,
+      production_stage: lead.production_stage || "Orders Awaiting confirmation",
+      payment_status: lead.payment_status || "Pending",
+      trello_card_id: trelloCardId,
+      trello_card_url: trelloCardUrl,
+    },
+    { onConflict: "id" }
+  );
+
+  if (trelloCardId) {
+    await supabase
+      .from("leads")
+      .update({
+        card_id: trelloCardId,
+        card_created: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", lead.id);
+  }
+
+  await supabase.from("lead_events").insert({
+    lead_db_id: lead.id,
+    actor_user_id: user.id,
+    event_type: "n8n_card_create_requested",
+    payload: {
+      jobId,
+      webhookUrl,
+      target_list_id: TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION,
+      card_title: cardTitle,
+      trello_card_id: trelloCardId,
+      trello_card_url: trelloCardUrl,
+    },
+  });
+
+  revalidatePath(`/leads/${lead.lead_id}`);
   revalidatePath("/jobs");
   revalidatePath("/leads");
+
+  const message = pickString(obj?.message) || null;
+  return { message: message || "Workflow was started" };
 }
 
 const autoAssignLeadSchema = z.object({

@@ -8,6 +8,10 @@ const assignToMeSchema = z.object({
   leadId: z.string().uuid(),
 });
 
+const deleteLeadSchema = z.object({
+  leadId: z.string().uuid(),
+});
+
 export async function assignToMeAction(formData: FormData): Promise<{ error?: string } | void> {
   const rawFormData = {
     leadId: formData.get("leadId") as string,
@@ -90,3 +94,54 @@ export async function assignToMeAction(formData: FormData): Promise<{ error?: st
   revalidatePath(`/leads/${result.data.leadId}`);
 }
 
+export async function deleteLeadAction(formData: FormData): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    leadId: formData.get("leadId") as string,
+  };
+
+  const result = deleteLeadSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return { error: result.error.issues[0]?.message || "Invalid input" };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Unauthorized" };
+  }
+
+  const role = profile.role;
+  if (role !== "admin" && role !== "ceo") {
+    return { error: "Unauthorized" };
+  }
+
+  const { data, error } = await supabase
+    .from("leads")
+    .delete()
+    .eq("id", result.data.leadId)
+    .select("id");
+
+  if (error) {
+    return { error: error.message || "Failed to delete lead" };
+  }
+
+  if (!data || data.length === 0) {
+    return { error: "Lead not found" };
+  }
+
+  revalidatePath("/leads");
+}

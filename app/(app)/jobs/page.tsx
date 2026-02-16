@@ -1,17 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/types/leads";
 import { RefreshButton } from "../leads/refresh-button";
 import { PageHeader } from "@/components/page-header";
 import { JobsBoardClient } from "./jobs-board-client";
+import { getViewer } from "@/lib/viewer";
 
-// Force dynamic rendering to always fetch latest data
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 10;
 
 async function getJobsBoardLeads(): Promise<Lead[]> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getViewer();
 
   if (!user) return [];
 

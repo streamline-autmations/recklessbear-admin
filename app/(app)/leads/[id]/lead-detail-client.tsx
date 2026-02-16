@@ -979,7 +979,8 @@ export function LeadDetailClient({
         return;
       }
 
-      toast.success("Sent to workflow");
+      const message = typeof json?.webhook_response?.message === "string" ? json.webhook_response.message : null;
+      toast.success(message || "Sent to workflow");
       setTrelloPreviewOpen(false);
       router.refresh();
     } finally {

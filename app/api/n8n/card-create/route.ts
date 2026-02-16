@@ -187,5 +187,9 @@ export async function POST(request: NextRequest) {
   revalidatePath("/leads");
   revalidatePath("/jobs");
 
-  return NextResponse.json({ success: true, webhook_response: responseJson || responseText || null });
+  return NextResponse.json({
+    success: true,
+    webhook_url: webhookUrl,
+    webhook_response: responseJson || responseText || null,
+  });
 }

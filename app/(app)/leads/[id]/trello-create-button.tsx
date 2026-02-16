@@ -25,7 +25,7 @@ export function TrelloCreateButton({ leadId }: TrelloCreateButtonProps) {
       if (result && "error" in result) {
         toast.error(result.error);
       } else {
-        toast.success("Trello card created successfully");
+        toast.success((result && "message" in result && result.message) ? result.message : "Sent to workflow");
         router.refresh();
       }
     });

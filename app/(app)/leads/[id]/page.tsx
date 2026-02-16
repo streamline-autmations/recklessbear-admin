@@ -4,6 +4,9 @@ import { LeadDetailClient } from "./lead-detail-client";
 import { LeadQuickActions } from "./lead-quick-actions";
 import { loadLeadsFromSpreadsheet } from "@/lib/leads/importLeadsFromSpreadsheet";
 import type { Lead } from "@/types/leads";
+import { getViewer } from "@/lib/viewer";
+
+type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 interface LeadDetailPageProps {
   params: Promise<{ id: string }>;
@@ -34,31 +37,14 @@ interface Rep {
 }
 
 async function getCurrentUserRole(): Promise<string | null> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return null;
-  }
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  return data?.role || null;
+  const { user, userRole } = await getViewer();
+  return user ? userRole : null;
 }
 
 /**
  * Get users for assignment (from profiles table)
  */
-async function getUsersForAssignment(): Promise<Rep[]> {
-  const supabase = await createClient();
-
+async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Rep[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select("user_id, full_name, email")
@@ -334,9 +320,7 @@ async function getLead(id: string): Promise<Lead | null> {
 }
 
 
-async function getNotes(leadId: string): Promise<Note[]> {
-  const supabase = await createClient();
-
+async function getNotes(supabase: ServerSupabaseClient, leadId: string): Promise<Note[]> {
   const { data, error } = await supabase
     .from("lead_notes")
     .select("id, lead_db_id, author_user_id, note, created_at")
@@ -373,9 +357,7 @@ async function getNotes(leadId: string): Promise<Note[]> {
   }));
 }
 
-async function getEvents(leadId: string): Promise<Event[]> {
-  const supabase = await createClient();
-
+async function getEvents(supabase: ServerSupabaseClient, leadId: string): Promise<Event[]> {
   const { data, error } = await supabase
     .from("lead_events")
     .select("id, lead_db_id, actor_user_id, event_type, payload, created_at")
@@ -402,8 +384,7 @@ type JobSummary = {
   production_stage: string | null;
 };
 
-async function getJobForLead(lead: Lead): Promise<JobSummary | null> {
-  const supabase = await createClient();
+async function getJobForLead(supabase: ServerSupabaseClient, lead: Lead): Promise<JobSummary | null> {
   const baseSelect = "id, trello_card_id, trello_card_url, trello_list_id, production_stage";
 
   const { data: byText, error: byTextError } = await supabase.from("jobs").select(baseSelect).eq("lead_id", lead.lead_id).maybeSingle();
@@ -420,6 +401,7 @@ async function getJobForLead(lead: Lead): Promise<JobSummary | null> {
 export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const { id } = await params;
 
+  const { supabase } = await getViewer();
   const lead = await getLead(id);
 
   if (!lead) {
@@ -433,11 +415,11 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const leadDbId = isUuid ? lead.id : null;
 
   const [notes, events, userRole, reps, job] = await Promise.all([
-    leadDbId ? getNotes(leadDbId) : Promise.resolve([]),
-    leadDbId ? getEvents(leadDbId) : Promise.resolve([]),
+    leadDbId ? getNotes(supabase, leadDbId) : Promise.resolve([]),
+    leadDbId ? getEvents(supabase, leadDbId) : Promise.resolve([]),
     getCurrentUserRole(),
-    getUsersForAssignment(),
-    getJobForLead(lead),
+    getUsersForAssignment(supabase),
+    getJobForLead(supabase, lead),
   ]);
 
   const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";

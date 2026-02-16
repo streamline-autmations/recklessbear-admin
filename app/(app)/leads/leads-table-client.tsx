@@ -17,12 +17,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LayoutGrid, List, X } from "lucide-react";
+import { LayoutGrid, List, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import type { Lead } from '@/types/leads';
 import { assignRepAction } from "./[id]/actions";
-import { assignToMeAction } from "./actions";
+import { assignToMeAction, deleteLeadAction } from "./actions";
 
 interface DisplayLead extends Lead {
   id?: string;
@@ -183,6 +183,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [assignOpenLeadKey, setAssignOpenLeadKey] = useState<string | null>(null);
   const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
   const [isAssignPending, startAssignTransition] = useTransition();
+  const [isDeletePending, startDeleteTransition] = useTransition();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const realtimeRefreshTimerRef = useRef<number | null>(null);
@@ -422,6 +423,22 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
     });
   }
 
+  function handleDeleteLead(leadDbId: string) {
+    if (!window.confirm("Delete this lead? This can't be undone.")) return;
+
+    startDeleteTransition(async () => {
+      const formData = new FormData();
+      formData.set("leadId", leadDbId);
+      const result = await deleteLeadAction(formData);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Lead deleted");
+      router.refresh();
+    });
+  }
+
   const LeadCardRow = ({ lead }: { lead: DisplayLead }) => {
     const leadKey = String(lead.id || lead.lead_id);
     const nextAction = getNextActionLabel(lead);
@@ -431,6 +448,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
 
     const canAssignToMe = !isCeoOrAdmin && !!currentUserId && !lead.assigned_rep_id && isUuid(lead.id);
     const canAssignAsAdmin = !!isCeoOrAdmin && !lead.assigned_rep_id && isUuid(lead.id);
+    const canDelete = !!isCeoOrAdmin && isUuid(lead.id);
 
     return (
       <Card className="transition-colors hover:bg-muted/30">
@@ -486,6 +504,18 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                     </Button>
                   )}
                 </>
+              )}
+
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  className="min-h-[44px] gap-2"
+                  disabled={isDeletePending}
+                  onClick={() => handleDeleteLead(lead.id as string)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {isDeletePending ? "Deleting..." : "Delete"}
+                </Button>
               )}
             </div>
           </div>
@@ -697,9 +727,24 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                               {formatDate(lead.submission_date || lead.created_at || "")}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button asChild className="min-h-[36px]" size="sm">
-                                <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button asChild className="min-h-[36px]" size="sm">
+                                  <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
+                                </Button>
+                                {!!isCeoOrAdmin && isUuid(lead.id) && (
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="min-h-[36px] gap-2"
+                                    disabled={isDeletePending}
+                                    onClick={() => handleDeleteLead(lead.id as string)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {isDeletePending ? "Deleting..." : "Delete"}
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
