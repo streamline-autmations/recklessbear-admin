@@ -155,8 +155,8 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     setIsDetecting(true);
     try {
       const result = await detectChatAction(selectedId);
-      if (result && "error" in result) {
-        toast.error(result.error);
+      if (!result || "error" in result) {
+        toast.error(result?.error || "Detect chat failed");
         return;
       }
       if (!result.matched) {

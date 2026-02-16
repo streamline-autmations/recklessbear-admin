@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2025-09-02T20:45:27.000Z",
+  "updatedAt": "2026-02-16T14:50:09.819Z",
   "createdAt": "2025-06-30T09:38:00.587Z",
   "id": "JAcCzcs71tIcEkca",
   "name": "Trello Packing Update",
@@ -12,7 +12,7 @@
         "conditions": {
           "string": [
             {
-              "value1": "={{ $json[\"Preffered Contact Method\"] }}",
+              "value1": "={{ $json.Phone || $json.phone || $json.FormattedPhone || \"\" }}",
               "operation": "isNotEmpty"
             }
           ]
@@ -30,9 +30,9 @@
     {
       "parameters": {
         "fromEmail": "etienne@recklessbear.co.za",
-        "toEmail": "={{ $json.Email }}",
+        "toEmail": "={{ $json.Email || $json.email }}",
         "subject": "Order Update – Now Being Packed",
-        "text": "=Hi {{ $json.Name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
+        "text": "=Hi {{ $json.Name || $json.customer_name || $json.name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
         "options": {}
       },
       "name": "Send Email",
@@ -52,26 +52,22 @@
     },
     {
       "parameters": {
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appJ6aBoii1ImdfSz",
-          "mode": "list",
-          "cachedResultName": "RecklessBear Leads",
-          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblqYBLNQf8QMyWa5",
-          "mode": "list",
-          "cachedResultName": "Leads",
-          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
-        },
-        "filterByFormula": "=TRIM({Lead ID}) = TRIM(\"{{ $json.lead_id }}\")",
-        "options": {}
+        "operation": "getAll",
+        "tableId": "leads",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "lead_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.lead_id || $json.body?.lead_id }}"
+            }
+          ]
+        }
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
       "position": [
         432,
         0
@@ -79,9 +75,9 @@
       "id": "8645881c-18a1-42de-999f-64a7872c88e6",
       "name": "Search records",
       "credentials": {
-        "airtableTokenApi": {
-          "id": "zCWbnEOG9v1KlWrO",
-          "name": "Airtable Personal Access Token account"
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
         }
       }
     },
@@ -91,7 +87,7 @@
         "url": "https://backend.aisensy.com/campaign/t1/api/v2",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"apiKey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTMxOGUxZTc2NGY5MGMwZWM5MTA2ZiIsIm5hbWUiOiJSZWNrbGVzc2JlYXIiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjg5MzE4ZTFlNzY0ZjkwYzBlYzkxMDY3IiwiYWN0aXZlUGxhbiI6IkZSRUVfRk9SRVZFUiIsImlhdCI6MTc1NDQ3MDYyNX0.RrP9EuL5wTm69QZdyhnKt9UdOoz8c7jQbpR25lftLqY\",\n  \"campaignName\": \"Packing Update & Dispatch Choice\",\n  \"destination\": \"{{ $json.FormattedPhone }}\",\n  \"userName\": \"{{ $json.Name }}\",\n  \"templateParams\": [\n    \"{{ $json.Name }}\",\n    \"{{ $json.FormattedLeadId }}\"\n  ],\n  \"source\": \"new-landing-page form\",\n  \"media\": {},\n  \"buttons\": [],\n  \"carouselCards\": [],\n  \"location\": {},\n  \"attributes\": {},\n  \"paramsFallbackValue\": {\n    \"FirstName\": \"user\"\n  }\n} ",
+        "jsonBody": "={{ {\n  apiKey: $env.AISENSY_API_KEY,\n  campaignName: \"Packing Update & Dispatch Choice\",\n  destination: $json.FormattedPhone,\n  userName: ($json.Name || $json.customer_name || $json.name || \"\"),\n  templateParams: [\n    ($json.Name || $json.customer_name || $json.name || \"\"),\n    $json.FormattedLeadId\n  ],\n  source: \"new-landing-page form\",\n  media: {},\n  buttons: [],\n  carouselCards: [],\n  location: {},\n  attributes: {},\n  paramsFallbackValue: {\n    FirstName: \"user\"\n  }\n} }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -107,6 +103,29 @@
     {
       "parameters": {
         "operation": "update",
+        "tableId": "leads",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "production_stage",
+              "fieldValue": "cleaning_packing"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
         "base": {
           "__rl": true,
           "value": "appJ6aBoii1ImdfSz",
@@ -855,8 +874,8 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
       "position": [
         1296,
         112
@@ -864,15 +883,38 @@
       "id": "832c26e6-19c3-4680-b9e9-32f095eaf423",
       "name": "Update record",
       "credentials": {
-        "airtableTokenApi": {
-          "id": "zCWbnEOG9v1KlWrO",
-          "name": "Airtable Personal Access Token account"
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
         }
       }
     },
     {
       "parameters": {
         "operation": "update",
+        "tableId": "leads",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "production_stage",
+              "fieldValue": "cleaning_packing"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
         "base": {
           "__rl": true,
           "value": "appJ6aBoii1ImdfSz",
@@ -1621,8 +1663,8 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
       "position": [
         1296,
         -96
@@ -1630,15 +1672,132 @@
       "id": "f88178d7-53de-4766-92ad-298f0b6f7740",
       "name": "Update record1",
       "credentials": {
-        "airtableTokenApi": {
-          "id": "zCWbnEOG9v1KlWrO",
-          "name": "Airtable Personal Access Token account"
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\n// Get the entire input data object from the previous node.\nconst inputData = $input.first().json;\n\n\n// --- Phone Number Formatting ---\n\n// Get the phone number using your variable.\nconst rawPhone = inputData.Phone;\nlet formattedPhoneNumber = \"\"; \n\nif (rawPhone) {\n  const digitsOnly = rawPhone.replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = rawPhone;\n  }\n}\n\n\n// --- Lead ID Formatting (UPDATED TO BE BOLD) ---\n\n// Get the Lead ID using your variable.\nconst rawLeadId = inputData[\"Lead ID\"];\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  // This wraps the ID in single asterisks for WhatsApp's BOLD format.\n  formattedLeadId = '*' + rawLeadId + '*';\n}\n\n\n// --- Final Output ---\n\n// Add our two prepared fields to the data object.\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\n// Return the data for the next node to use.\nreturn inputData;"
+        "operation": "getAll",
+        "tableId": "jobs",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "lead_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            },
+            {
+              "keyName": "is_active",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        16
+      ],
+      "id": "3bb5da1b-9d9a-4a90-9e3b-0c684476ae92",
+      "name": "Supabase - Find active job",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "jobs",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "production_stage",
+              "fieldValue": "cleaning_packing"
+            },
+            {
+              "fieldId": "trello_list_id",
+              "fieldValue": "68ae5df1464cf6e1d11cc5b6"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        16
+      ],
+      "id": "3c4a88c9-61aa-409a-8c37-b3a0fbc81d4f",
+      "name": "Supabase - Update job stage",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "job_stage_history",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "job_id",
+              "fieldValue": "={{ $json.id }}"
+            },
+            {
+              "fieldId": "stage",
+              "fieldValue": "cleaning_packing"
+            },
+            {
+              "fieldId": "entered_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        16
+      ],
+      "id": "49c6f6e6-1ca3-489b-a721-472aaf21fcbc",
+      "name": "Supabase - Insert stage history",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Vo8bjzqDqUEBKfOA",
+          "name": "RB-Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\nconst inputData = $input.first().json;\n\nconst rawPhone = inputData.Phone || inputData.phone || inputData.customer_phone || \"\";\nlet formattedPhoneNumber = \"\";\n\nif (rawPhone) {\n  const digitsOnly = String(rawPhone).replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = String(rawPhone);\n  }\n}\n\nconst rawLeadId = inputData[\"Lead ID\"] || inputData.lead_id || inputData.incoming_lead_id || \"\";\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  formattedLeadId = '*' + String(rawLeadId) + '*';\n}\n\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\nreturn inputData;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1682,14 +1841,14 @@
       "main": [
         [
           {
-            "node": "Send Email",
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "HTTP Request",
+            "node": "Send Email",
             "type": "main",
             "index": 0
           }
@@ -1718,6 +1877,50 @@
         ]
       ]
     },
+    "Update record": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Find active job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update record1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Find active job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Find active job": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Update job stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Update job stage": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert stage history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Code": {
       "main": [
         [
@@ -1733,7 +1936,8 @@
   "settings": {
     "executionOrder": "v1",
     "timezone": "Africa/Windhoek",
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
   "staticData": {
     "node:Google Sheets Trigger": {
@@ -1747,9 +1951,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
-  "activeVersionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
-  "versionCounter": 3,
+  "versionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
+  "activeVersionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
+  "versionCounter": 111,
   "triggerCount": 1,
   "shared": [
     {
@@ -1810,9 +2014,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-02-13T12:02:38.000Z",
-    "createdAt": "2025-11-28T15:28:50.474Z",
-    "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+    "updatedAt": "2026-02-16T14:50:09.822Z",
+    "createdAt": "2026-02-16T14:50:09.822Z",
+    "versionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
     "workflowId": "JAcCzcs71tIcEkca",
     "nodes": [
       {
@@ -1820,7 +2024,7 @@
           "conditions": {
             "string": [
               {
-                "value1": "={{ $json[\"Preffered Contact Method\"] }}",
+                "value1": "={{ $json.Phone || $json.phone || $json.FormattedPhone || \"\" }}",
                 "operation": "isNotEmpty"
               }
             ]
@@ -1838,9 +2042,9 @@
       {
         "parameters": {
           "fromEmail": "etienne@recklessbear.co.za",
-          "toEmail": "={{ $json.Email }}",
+          "toEmail": "={{ $json.Email || $json.email }}",
           "subject": "Order Update – Now Being Packed",
-          "text": "=Hi {{ $json.Name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
+          "text": "=Hi {{ $json.Name || $json.customer_name || $json.name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
           "options": {}
         },
         "name": "Send Email",
@@ -1860,26 +2064,22 @@
       },
       {
         "parameters": {
-          "operation": "search",
-          "base": {
-            "__rl": true,
-            "value": "appJ6aBoii1ImdfSz",
-            "mode": "list",
-            "cachedResultName": "RecklessBear Leads",
-            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
-          },
-          "table": {
-            "__rl": true,
-            "value": "tblqYBLNQf8QMyWa5",
-            "mode": "list",
-            "cachedResultName": "Leads",
-            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
-          },
-          "filterByFormula": "=TRIM({Lead ID}) = TRIM(\"{{ $json.lead_id }}\")",
-          "options": {}
+          "operation": "getAll",
+          "tableId": "leads",
+          "returnAll": true,
+          "matchType": "allFilters",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "lead_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.lead_id || $json.body?.lead_id }}"
+              }
+            ]
+          }
         },
-        "type": "n8n-nodes-base.airtable",
-        "typeVersion": 2.1,
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
         "position": [
           432,
           0
@@ -1887,9 +2087,9 @@
         "id": "8645881c-18a1-42de-999f-64a7872c88e6",
         "name": "Search records",
         "credentials": {
-          "airtableTokenApi": {
-            "id": "zCWbnEOG9v1KlWrO",
-            "name": "Airtable Personal Access Token account"
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
           }
         }
       },
@@ -1899,7 +2099,7 @@
           "url": "https://backend.aisensy.com/campaign/t1/api/v2",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={\n  \"apiKey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTMxOGUxZTc2NGY5MGMwZWM5MTA2ZiIsIm5hbWUiOiJSZWNrbGVzc2JlYXIiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjg5MzE4ZTFlNzY0ZjkwYzBlYzkxMDY3IiwiYWN0aXZlUGxhbiI6IkZSRUVfRk9SRVZFUiIsImlhdCI6MTc1NDQ3MDYyNX0.RrP9EuL5wTm69QZdyhnKt9UdOoz8c7jQbpR25lftLqY\",\n  \"campaignName\": \"Packing Update & Dispatch Choice\",\n  \"destination\": \"{{ $json.FormattedPhone }}\",\n  \"userName\": \"{{ $json.Name }}\",\n  \"templateParams\": [\n    \"{{ $json.Name }}\",\n    \"{{ $json.FormattedLeadId }}\"\n  ],\n  \"source\": \"new-landing-page form\",\n  \"media\": {},\n  \"buttons\": [],\n  \"carouselCards\": [],\n  \"location\": {},\n  \"attributes\": {},\n  \"paramsFallbackValue\": {\n    \"FirstName\": \"user\"\n  }\n} ",
+          "jsonBody": "={{ {\n  apiKey: $env.AISENSY_API_KEY,\n  campaignName: \"Packing Update & Dispatch Choice\",\n  destination: $json.FormattedPhone,\n  userName: ($json.Name || $json.customer_name || $json.name || \"\"),\n  templateParams: [\n    ($json.Name || $json.customer_name || $json.name || \"\"),\n    $json.FormattedLeadId\n  ],\n  source: \"new-landing-page form\",\n  media: {},\n  buttons: [],\n  carouselCards: [],\n  location: {},\n  attributes: {},\n  paramsFallbackValue: {\n    FirstName: \"user\"\n  }\n} }}",
           "options": {}
         },
         "type": "n8n-nodes-base.httpRequest",
@@ -1915,6 +2115,29 @@
       {
         "parameters": {
           "operation": "update",
+          "tableId": "leads",
+          "matchType": "allFilters",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "id",
+                "condition": "eq",
+                "keyValue": "={{ $json.id }}"
+              }
+            ]
+          },
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "production_stage",
+                "fieldValue": "cleaning_packing"
+              },
+              {
+                "fieldId": "updated_at",
+                "fieldValue": "={{ new Date().toISOString() }}"
+              }
+            ]
+          },
           "base": {
             "__rl": true,
             "value": "appJ6aBoii1ImdfSz",
@@ -2663,8 +2886,8 @@
           },
           "options": {}
         },
-        "type": "n8n-nodes-base.airtable",
-        "typeVersion": 2.1,
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
         "position": [
           1296,
           112
@@ -2672,15 +2895,38 @@
         "id": "832c26e6-19c3-4680-b9e9-32f095eaf423",
         "name": "Update record",
         "credentials": {
-          "airtableTokenApi": {
-            "id": "zCWbnEOG9v1KlWrO",
-            "name": "Airtable Personal Access Token account"
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
           }
         }
       },
       {
         "parameters": {
           "operation": "update",
+          "tableId": "leads",
+          "matchType": "allFilters",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "id",
+                "condition": "eq",
+                "keyValue": "={{ $json.id }}"
+              }
+            ]
+          },
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "production_stage",
+                "fieldValue": "cleaning_packing"
+              },
+              {
+                "fieldId": "updated_at",
+                "fieldValue": "={{ new Date().toISOString() }}"
+              }
+            ]
+          },
           "base": {
             "__rl": true,
             "value": "appJ6aBoii1ImdfSz",
@@ -3429,8 +3675,8 @@
           },
           "options": {}
         },
-        "type": "n8n-nodes-base.airtable",
-        "typeVersion": 2.1,
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
         "position": [
           1296,
           -96
@@ -3438,15 +3684,132 @@
         "id": "f88178d7-53de-4766-92ad-298f0b6f7740",
         "name": "Update record1",
         "credentials": {
-          "airtableTokenApi": {
-            "id": "zCWbnEOG9v1KlWrO",
-            "name": "Airtable Personal Access Token account"
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
           }
         }
       },
       {
         "parameters": {
-          "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\n// Get the entire input data object from the previous node.\nconst inputData = $input.first().json;\n\n\n// --- Phone Number Formatting ---\n\n// Get the phone number using your variable.\nconst rawPhone = inputData.Phone;\nlet formattedPhoneNumber = \"\"; \n\nif (rawPhone) {\n  const digitsOnly = rawPhone.replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = rawPhone;\n  }\n}\n\n\n// --- Lead ID Formatting (UPDATED TO BE BOLD) ---\n\n// Get the Lead ID using your variable.\nconst rawLeadId = inputData[\"Lead ID\"];\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  // This wraps the ID in single asterisks for WhatsApp's BOLD format.\n  formattedLeadId = '*' + rawLeadId + '*';\n}\n\n\n// --- Final Output ---\n\n// Add our two prepared fields to the data object.\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\n// Return the data for the next node to use.\nreturn inputData;"
+          "operation": "getAll",
+          "tableId": "jobs",
+          "returnAll": true,
+          "matchType": "allFilters",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "lead_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.id }}"
+              },
+              {
+                "keyName": "is_active",
+                "condition": "eq",
+                "keyValue": "true"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          1520,
+          16
+        ],
+        "id": "3bb5da1b-9d9a-4a90-9e3b-0c684476ae92",
+        "name": "Supabase - Find active job",
+        "credentials": {
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "tableId": "jobs",
+          "matchType": "allFilters",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "id",
+                "condition": "eq",
+                "keyValue": "={{ $json.id }}"
+              }
+            ]
+          },
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "production_stage",
+                "fieldValue": "cleaning_packing"
+              },
+              {
+                "fieldId": "trello_list_id",
+                "fieldValue": "68ae5df1464cf6e1d11cc5b6"
+              },
+              {
+                "fieldId": "updated_at",
+                "fieldValue": "={{ new Date().toISOString() }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          1744,
+          16
+        ],
+        "id": "3c4a88c9-61aa-409a-8c37-b3a0fbc81d4f",
+        "name": "Supabase - Update job stage",
+        "credentials": {
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "tableId": "job_stage_history",
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "job_id",
+                "fieldValue": "={{ $json.id }}"
+              },
+              {
+                "fieldId": "stage",
+                "fieldValue": "cleaning_packing"
+              },
+              {
+                "fieldId": "entered_at",
+                "fieldValue": "={{ new Date().toISOString() }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          1968,
+          16
+        ],
+        "id": "49c6f6e6-1ca3-489b-a721-472aaf21fcbc",
+        "name": "Supabase - Insert stage history",
+        "credentials": {
+          "supabaseApi": {
+            "id": "Vo8bjzqDqUEBKfOA",
+            "name": "RB-Admin"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\nconst inputData = $input.first().json;\n\nconst rawPhone = inputData.Phone || inputData.phone || inputData.customer_phone || \"\";\nlet formattedPhoneNumber = \"\";\n\nif (rawPhone) {\n  const digitsOnly = String(rawPhone).replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = String(rawPhone);\n  }\n}\n\nconst rawLeadId = inputData[\"Lead ID\"] || inputData.lead_id || inputData.incoming_lead_id || \"\";\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  formattedLeadId = '*' + String(rawLeadId) + '*';\n}\n\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\nreturn inputData;"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -3490,14 +3853,14 @@
         "main": [
           [
             {
-              "node": "Send Email",
+              "node": "HTTP Request",
               "type": "main",
               "index": 0
             }
           ],
           [
             {
-              "node": "HTTP Request",
+              "node": "Send Email",
               "type": "main",
               "index": 0
             }
@@ -3526,6 +3889,50 @@
           ]
         ]
       },
+      "Update record": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Find active job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update record1": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Find active job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Find active job": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Update job stage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Update job stage": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Insert stage history",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
       "Code": {
         "main": [
           [
@@ -3538,16 +3945,32 @@
         ]
       }
     },
-    "authors": "system migration",
-    "name": "Version 137a2aab",
-    "description": "",
+    "authors": "Christiaan Steffen",
+    "name": null,
+    "description": null,
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-02-13T12:02:38.138Z",
-        "id": 139,
+        "createdAt": "2026-02-16T14:50:10.446Z",
+        "id": 241,
         "workflowId": "JAcCzcs71tIcEkca",
-        "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+        "versionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
+        "event": "activated",
+        "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f"
+      },
+      {
+        "createdAt": "2026-02-16T14:50:10.557Z",
+        "id": 242,
+        "workflowId": "JAcCzcs71tIcEkca",
+        "versionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
+        "event": "activated",
+        "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f"
+      },
+      {
+        "createdAt": "2026-02-16T14:50:10.622Z",
+        "id": 243,
+        "workflowId": "JAcCzcs71tIcEkca",
+        "versionId": "940bf8c3-5727-46d9-bbd5-388af68cfa67",
         "event": "activated",
         "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f"
       }
