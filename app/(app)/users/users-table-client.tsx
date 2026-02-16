@@ -23,9 +23,10 @@ interface Profile {
 
 interface UsersTableClientProps {
   initialUsers: Profile[];
+  currentUserRole: string | null;
 }
 
-export function UsersTableClient({ initialUsers }: UsersTableClientProps) {
+export function UsersTableClient({ initialUsers, currentUserRole }: UsersTableClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredUsers = useMemo(() => {
@@ -68,7 +69,7 @@ export function UsersTableClient({ initialUsers }: UsersTableClientProps) {
                 </TableRow>
               ) : (
                 filteredUsers.map((user) => (
-                  <UsersTableEdit key={user.user_id} user={user} />
+                  <UsersTableEdit key={user.user_id} user={user} canDelete={currentUserRole === "ceo"} />
                 ))
               )}
             </TableBody>

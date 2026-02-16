@@ -58,6 +58,13 @@ function applyTranslate(el: HTMLElement, pos: WidgetPos) {
   el.style.transform = base ? `${base} ${translate}` : translate;
 }
 
+function clampPos(pos: WidgetPos): WidgetPos {
+  return {
+    x: clamp(pos.x, -window.innerWidth + 80, window.innerWidth - 80),
+    y: clamp(pos.y, -window.innerHeight + 80, window.innerHeight - 80),
+  };
+}
+
 function findMovableRoot(container: HTMLElement): HTMLElement | null {
   const stack: HTMLElement[] = [container];
   let guard = 0;
@@ -128,6 +135,7 @@ function ensureControls(root: HTMLElement, abortSignal: AbortSignal) {
   controls.style.backdropFilter = "blur(6px)";
   controls.style.color = "white";
   controls.style.zIndex = "2147483647";
+  controls.style.pointerEvents = "auto";
   controls.style.userSelect = "none";
 
   const dragBtn = document.createElement("button");
@@ -231,14 +239,29 @@ export function ConvocoreWidgetControls() {
       const root = findMovableRoot(overlay);
       if (!root) return;
 
+      root.style.pointerEvents = "auto";
+
       if (!root.getAttribute("data-rb-vg-base-transform")) {
         root.setAttribute("data-rb-vg-base-transform", getBaseTransform(root));
       }
 
       const hidden = readHidden();
-      const pos = readPos();
+      const pos = clampPos(readPos());
 
+      writePos(pos);
       applyTranslate(root, pos);
+
+      const rect = root.getBoundingClientRect();
+      const mostlyOffscreen =
+        rect.right < 40 ||
+        rect.bottom < 40 ||
+        rect.left > window.innerWidth - 40 ||
+        rect.top > window.innerHeight - 40;
+      if (mostlyOffscreen) {
+        const reset: WidgetPos = { x: 0, y: 0 };
+        writePos(reset);
+        applyTranslate(root, reset);
+      }
 
       if (hidden) {
         root.style.display = "none";
@@ -263,7 +286,8 @@ export function ConvocoreWidgetControls() {
 
     const onResize = () => {
       if (!attachedRoot) return;
-      const pos = readPos();
+      const pos = clampPos(readPos());
+      writePos(pos);
       applyTranslate(attachedRoot, pos);
     };
     window.addEventListener("resize", onResize, { signal: abortController.signal });
@@ -276,4 +300,3 @@ export function ConvocoreWidgetControls() {
 
   return null;
 }
-

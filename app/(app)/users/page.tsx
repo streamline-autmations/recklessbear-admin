@@ -71,7 +71,7 @@ export default async function UsersPage() {
           <CardTitle>Users List</CardTitle>
         </CardHeader>
         <CardContent>
-          <UsersTableClient initialUsers={users} />
+          <UsersTableClient initialUsers={users} currentUserRole={userRole} />
         </CardContent>
       </Card>
     </div>

@@ -287,13 +287,6 @@ export function LeadDetailClient({
     }
   }
 
-  function getQuestionTopic(questionData: Record<string, unknown> | null | undefined): string | null {
-    const topic = questionData?.["topic"];
-    if (typeof topic !== "string") return null;
-    const trimmed = topic.trim();
-    return trimmed ? trimmed : null;
-  }
-
   function normalizeStringArray(value: unknown): string[] {
     if (!value) return [];
     if (Array.isArray(value)) return value.map(String).map((s) => s.trim()).filter(Boolean);
@@ -408,7 +401,6 @@ export function LeadDetailClient({
     return legacy;
   })();
 
-  const questionTopic = getQuestionTopic(lead.question_data);
   const isDev = process.env.NODE_ENV !== "production";
 
   const isDbLead = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
@@ -1041,68 +1033,74 @@ export function LeadDetailClient({
       </Dialog>
 
       <Dialog open={trelloPreviewOpen} onOpenChange={setTrelloPreviewOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Preview Trello Card</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] p-0 flex flex-col">
+          <div className="px-6 pt-6">
+            <DialogHeader>
+              <DialogTitle>Preview Trello Card</DialogTitle>
+            </DialogHeader>
+          </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Card Title</Label>
-              <Input value={trelloCardTitle} onChange={(e) => setTrelloCardTitle(e.target.value)} className="min-h-[44px]" />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Target List</Label>
-              {isCeoOrAdmin ? (
-                <Select value={trelloTargetListId} onValueChange={setTrelloTargetListId}>
-                  <SelectTrigger className="min-h-[44px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION}>Orders Awaiting confirmation</SelectItem>
-                    <SelectItem value={TRELLO_LISTS.ORDERS}>Orders</SelectItem>
-                    <SelectItem value={TRELLO_LISTS.SUPPLIER_ORDERS}>Supplier Orders</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input value="Orders Awaiting confirmation" disabled className="min-h-[44px]" />
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label>Product List</Label>
-                <Button type="button" variant="outline" size="sm" className="h-9 gap-2" onClick={copyProductList} disabled={!trelloProductList.trim()}>
-                  <Copy className="h-4 w-4" />
-                  Copy Product List
-                </Button>
+          <div className="px-6 py-4 overflow-y-auto flex-1">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Card Title</Label>
+                <Input value={trelloCardTitle} onChange={(e) => setTrelloCardTitle(e.target.value)} className="min-h-[44px]" />
               </div>
-              <Textarea
-                value={trelloProductList}
-                onChange={(e) => setTrelloProductList(e.target.value)}
-                className="min-h-[140px]"
-                placeholder="Paste or type the product list here. Use the same formatting as the template. This is required before creating the card."
-              />
-              {!trelloProductList.trim() && (
-                <p className="text-sm text-muted-foreground">Product list is required before you can create the Trello card.</p>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <Label>Card Description (Preview)</Label>
-              <Textarea value={trelloDescriptionPreview} readOnly className="min-h-[280px]" />
+              <div className="space-y-2">
+                <Label>Target List</Label>
+                {isCeoOrAdmin ? (
+                  <Select value={trelloTargetListId} onValueChange={setTrelloTargetListId}>
+                    <SelectTrigger className="min-h-[44px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION}>Orders Awaiting confirmation</SelectItem>
+                      <SelectItem value={TRELLO_LISTS.ORDERS}>Orders</SelectItem>
+                      <SelectItem value={TRELLO_LISTS.SUPPLIER_ORDERS}>Supplier Orders</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value="Orders Awaiting confirmation" disabled className="min-h-[44px]" />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Product List</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-9 gap-2" onClick={copyProductList} disabled={!trelloProductList.trim()}>
+                    <Copy className="h-4 w-4" />
+                    Copy Product List
+                  </Button>
+                </div>
+                <Textarea
+                  value={trelloProductList}
+                  onChange={(e) => setTrelloProductList(e.target.value)}
+                  className="min-h-[140px]"
+                  placeholder="Paste or type the product list here. Use the same formatting as the template. This is required before creating the card."
+                />
+                {!trelloProductList.trim() && (
+                  <p className="text-sm text-muted-foreground">Product list is required before you can create the Trello card.</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Card Description (Preview)</Label>
+                <Textarea value={trelloDescriptionPreview} readOnly className="min-h-[280px]" />
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setTrelloPreviewOpen(false)} className="min-h-[44px]" disabled={isCreatingTrello}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={createTrelloCard} className="min-h-[44px]" disabled={isCreatingTrello || !trelloProductList.trim()}>
-              {isCreatingTrello ? "Sending..." : "Send to Workflow"}
-            </Button>
-          </DialogFooter>
+          <div className="px-6 pb-6">
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setTrelloPreviewOpen(false)} className="min-h-[44px]" disabled={isCreatingTrello}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={createTrelloCard} className="min-h-[44px]" disabled={isCreatingTrello || !trelloProductList.trim()}>
+                {isCreatingTrello ? "Sending..." : "Send to Workflow"}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1829,16 +1827,6 @@ export function LeadDetailClient({
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.pre_call_notes}</p>
                     </div>
                   )}
-                  {lead.booking_data && Object.keys(lead.booking_data).length > 0 && (
-                    <div className="md:col-span-2">
-                      <details className="mt-4">
-                        <summary className="text-sm font-medium cursor-pointer">View Raw Booking Data</summary>
-                        <pre className="text-xs text-muted-foreground font-mono mt-2 p-3 bg-muted rounded overflow-auto">
-                          {JSON.stringify(lead.booking_data, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1853,21 +1841,11 @@ export function LeadDetailClient({
 
         {/* Question Tab */}
         <TabsContent value="question" className="space-y-4">
-          {(lead.has_asked_question || lead.question_data || lead.question) ? (
+          {(lead.has_asked_question || lead.question) ? (
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-semibold mb-4">Question Details</h3>
                 <div className="space-y-6">
-                  {/* Topic Field */}
-                  {questionTopic && (
-                    <div>
-                       <p className="text-sm font-medium mb-2">Topic</p>
-                       <span className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground shadow">
-                         {questionTopic}
-                       </span>
-                    </div>
-                  )}
-
                   {/* Question Field */}
                   {lead.question && (
                     <div>

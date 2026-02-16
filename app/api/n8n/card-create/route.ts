@@ -23,6 +23,7 @@ function extractCardInfo(payload: unknown): { trelloCardId: string | null; trell
 
   const trelloCardUrl =
     pickString(obj.trello_card_url) ||
+    pickString(obj.trello_url) ||
     pickString(obj.card_url) ||
     pickString(obj.url) ||
     pickString(obj.shortUrl) ||
@@ -83,39 +84,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Set Quote Approved to start production" }, { status: 400 });
   }
 
-  const webhookUrl = process.env.N8N_CARD_CREATE_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/card-create";
+  const webhookUrl = process.env.N8N_CARD_CREATE_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/create-trello-card";
 
   const payload = {
     source: "recklessbear-admin",
-    type: "card-create",
     requested_at: new Date().toISOString(),
     actor_user_id: actor.user.id,
-    lead: {
-      id: lead.id,
-      lead_id: lead.lead_id,
-      customer_name: lead.customer_name,
-      name: lead.name,
-      email: lead.email,
-      phone: lead.phone,
-      organization: lead.organization,
-      status: lead.status,
-      sales_status: lead.sales_status,
-      payment_status: lead.payment_status,
-      production_stage: lead.production_stage,
-      delivery_date: lead.delivery_date,
-      design_notes: lead.design_notes,
-      trello_product_list: lead.trello_product_list,
-      selected_apparel_items: lead.selected_apparel_items,
-      card_id: lead.card_id,
-      card_created: lead.card_created,
-    },
-    card: {
-      job_id: jobId,
-      card_title: cardTitle,
-      target_list_id: targetListId || null,
-      product_list: productList,
-      card_description: cardDescription,
-    },
+    lead_id: lead.lead_id,
+    job_id: jobId,
+    card_title: cardTitle,
+    card_description: cardDescription,
+    trello_list_id: targetListId,
+    product_list: productList,
+    customer_email: lead.email,
+    customer_phone: lead.phone,
+    customer_name: lead.customer_name || lead.name || null,
+    organization: lead.organization,
   };
 
   const response = await fetch(webhookUrl, {

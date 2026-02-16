@@ -4,6 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
+function getAppBaseUrl() {
+  const explicit = process.env.NEXT_PUBLIC_BASE_URL;
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "development") return "http://localhost:3000";
+  return null;
+}
+
 const updateUserSchema = z.object({
   userId: z.string().uuid(),
   fullName: z.string().min(1).max(255),
@@ -73,6 +82,10 @@ const createUserSchema = z.object({
   role: z.enum(["ceo", "admin", "rep"]),
 });
 
+const deleteUserSchema = z.object({
+  userId: z.string().uuid(),
+});
+
 export async function createUserAction(
   formData: FormData
 ): Promise<{ error?: string; userId?: string } | void> {
@@ -125,10 +138,16 @@ export async function createUserAction(
     },
   });
 
+  const baseUrl = getAppBaseUrl();
+  if (!baseUrl) {
+    return { error: "Missing NEXT_PUBLIC_BASE_URL (or VERCEL_URL) for invite redirect" };
+  }
+
   // Create auth user (invite via email)
   const { data: authUser, error: authError } = await adminClient.auth.admin.inviteUserByEmail(
     result.data.email,
     {
+      redirectTo: `${baseUrl}/auth/callback`,
       data: {
         full_name: result.data.fullName,
         role: result.data.role,
@@ -167,4 +186,77 @@ export async function createUserAction(
   
   revalidatePath("/users");
   return { userId: authUser.user.id };
+}
+
+export async function deleteUserAction(
+  formData: FormData
+): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    userId: formData.get("userId") as string,
+  };
+
+  const result = deleteUserSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  if (user.id === result.data.userId) {
+    return { error: "You cannot delete your own user" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "ceo") {
+    return { error: "Unauthorized: Only CEO can delete users" };
+  }
+
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_URL) {
+    return { error: "Server configuration error: Missing Supabase credentials" };
+  }
+
+  const { createClient: createAdminClient } = await import("@supabase/supabase-js");
+  const adminClient = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const { error: authError } = await adminClient.auth.admin.deleteUser(result.data.userId);
+  if (authError) {
+    return { error: authError.message || "Failed to delete user" };
+  }
+
+  const { error: profileDeleteError } = await adminClient
+    .from("profiles")
+    .delete()
+    .eq("user_id", result.data.userId);
+  if (profileDeleteError) {
+    return { error: profileDeleteError.message || "Failed to delete user profile" };
+  }
+
+  const { error: legacyUsersDeleteError } = await adminClient
+    .from("users")
+    .delete()
+    .eq("id", result.data.userId);
+  if (legacyUsersDeleteError && !legacyUsersDeleteError.message.toLowerCase().includes("does not exist")) {
+    return { error: legacyUsersDeleteError.message || "Failed to delete legacy user record" };
+  }
+
+  revalidatePath("/users");
 }

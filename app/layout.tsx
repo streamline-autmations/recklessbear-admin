@@ -28,7 +28,15 @@ export default function RootLayout({
           {children}
           <Toaster />
         </ThemeProvider>
-        <div id="VG_OVERLAY_CONTAINER" style={{ width: 0, height: 0 }} />
+        <div
+          id="VG_OVERLAY_CONTAINER"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2147483000,
+            pointerEvents: "none",
+          }}
+        />
         <ConvocoreWidgetControls />
         <Script id="convocore-config" strategy="afterInteractive">
           {`

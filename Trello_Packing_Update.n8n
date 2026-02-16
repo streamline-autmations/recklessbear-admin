@@ -1,0 +1,3556 @@
+{
+  "updatedAt": "2025-09-02T20:45:27.000Z",
+  "createdAt": "2025-06-30T09:38:00.587Z",
+  "id": "JAcCzcs71tIcEkca",
+  "name": "Trello Packing Update",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json[\"Preffered Contact Method\"] }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Is WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        848,
+        0
+      ],
+      "id": "8310ef43-a382-417b-aad2-5b7ae86a16ad"
+    },
+    {
+      "parameters": {
+        "fromEmail": "etienne@recklessbear.co.za",
+        "toEmail": "={{ $json.Email }}",
+        "subject": "Order Update – Now Being Packed",
+        "text": "=Hi {{ $json.Name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
+        "options": {}
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -96
+      ],
+      "id": "17025564-7740-4f19-908b-b43a0d02e402",
+      "credentials": {
+        "smtp": {
+          "id": "cOz8e6I3gQhuTe0o",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appJ6aBoii1ImdfSz",
+          "mode": "list",
+          "cachedResultName": "RecklessBear Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblqYBLNQf8QMyWa5",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+        },
+        "filterByFormula": "=TRIM({Lead ID}) = TRIM(\"{{ $json.lead_id }}\")",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        432,
+        0
+      ],
+      "id": "8645881c-18a1-42de-999f-64a7872c88e6",
+      "name": "Search records",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "zCWbnEOG9v1KlWrO",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://backend.aisensy.com/campaign/t1/api/v2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"apiKey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTMxOGUxZTc2NGY5MGMwZWM5MTA2ZiIsIm5hbWUiOiJSZWNrbGVzc2JlYXIiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjg5MzE4ZTFlNzY0ZjkwYzBlYzkxMDY3IiwiYWN0aXZlUGxhbiI6IkZSRUVfRk9SRVZFUiIsImlhdCI6MTc1NDQ3MDYyNX0.RrP9EuL5wTm69QZdyhnKt9UdOoz8c7jQbpR25lftLqY\",\n  \"campaignName\": \"Packing Update & Dispatch Choice\",\n  \"destination\": \"{{ $json.FormattedPhone }}\",\n  \"userName\": \"{{ $json.Name }}\",\n  \"templateParams\": [\n    \"{{ $json.Name }}\",\n    \"{{ $json.FormattedLeadId }}\"\n  ],\n  \"source\": \"new-landing-page form\",\n  \"media\": {},\n  \"buttons\": [],\n  \"carouselCards\": [],\n  \"location\": {},\n  \"attributes\": {},\n  \"paramsFallbackValue\": {\n    \"FirstName\": \"user\"\n  }\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        112
+      ],
+      "id": "480a064c-4e68-4887-8c12-9f881d8ff551",
+      "name": "HTTP Request",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appJ6aBoii1ImdfSz",
+          "mode": "list",
+          "cachedResultName": "RecklessBear Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblqYBLNQf8QMyWa5",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Lead ID": "={{ $('Search records').item.json[\"Lead ID\"] }}",
+            "Production Stage": "Cleaning & Packing"
+          },
+          "matchingColumns": [
+            "Lead ID"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lead ID",
+              "displayName": "Lead ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Organization",
+              "displayName": "Organization",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sales Status",
+              "displayName": "Sales Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "Assigned",
+                  "value": "Assigned"
+                },
+                {
+                  "name": "Contacted",
+                  "value": "Contacted"
+                },
+                {
+                  "name": "Quote Sent",
+                  "value": "Quote Sent"
+                },
+                {
+                  "name": "Quote Approved",
+                  "value": "Quote Approved"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Is Active",
+              "displayName": "Is Active",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Completed Flag",
+              "displayName": "Completed Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Accessories Selected",
+              "displayName": "Accessories Selected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Product Type",
+              "displayName": "Product Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Include Warmups",
+              "displayName": "Include Warmups",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quantity Range",
+              "displayName": "Quantity Range",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has Deadline",
+              "displayName": "Has Deadline",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivery Date",
+              "displayName": "Delivery Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Attachments",
+              "displayName": "Attachments",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Submission Date",
+              "displayName": "Submission Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Preffered Contact Method",
+              "displayName": "Preffered Contact Method",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "WhatsApp",
+                  "value": "WhatsApp"
+                },
+                {
+                  "name": "Email & WhatsApp",
+                  "value": "Email & WhatsApp"
+                },
+                {
+                  "name": "Phone call",
+                  "value": "Phone call"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Assigned Rep",
+              "displayName": "Assigned Rep",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Name (from Assigned Rep)",
+              "displayName": "Name (from Assigned Rep)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Alert Sent",
+              "displayName": "Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Rep Name",
+              "displayName": "Rep Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "WhatsApp Alert",
+              "displayName": "WhatsApp Alert",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Alert Sent",
+              "displayName": "Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WhatsApp Follow-up Alert Sent",
+              "displayName": "WhatsApp Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Booking Time",
+              "displayName": "Booking Time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Booking Approved",
+              "displayName": "Booking Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quote Form Submitted",
+              "displayName": "Quote Form Submitted",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Design Notes",
+              "displayName": "Design Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Card Created",
+              "displayName": "Card Created",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Production Stage",
+              "displayName": "Production Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Awaiting Confirmation",
+                  "value": "Order Awaiting Confirmation"
+                },
+                {
+                  "name": "Designing",
+                  "value": "Designing"
+                },
+                {
+                  "name": "Layout Department",
+                  "value": "Layout Department"
+                },
+                {
+                  "name": "Print & Press Department",
+                  "value": "Print & Press Department"
+                },
+                {
+                  "name": "Manufacturing Department",
+                  "value": "Manufacturing Department"
+                },
+                {
+                  "name": "Cleaning & Packing",
+                  "value": "Cleaning & Packing"
+                },
+                {
+                  "name": "Ready for Dispatch/Collection",
+                  "value": "Ready for Dispatch/Collection"
+                },
+                {
+                  "name": "Out for Delivery",
+                  "value": "Out for Delivery"
+                },
+                {
+                  "name": "Delivered/Collected",
+                  "value": "Delivered/Collected"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Last Stage Update Sent",
+              "displayName": "Last Stage Update Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has requested quote",
+              "displayName": "Has requested quote",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has booked call",
+              "displayName": "Has booked call",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has asked question",
+              "displayName": "Has asked question",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Question",
+              "displayName": "Question",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Pre call notes",
+              "displayName": "Pre call notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "48h Follow-up Alert Sent",
+              "displayName": "48h Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "48h Follow-up WhatsApp Sent",
+              "displayName": "48h Follow-up WhatsApp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "CEO Alert Sent (Email)",
+              "displayName": "CEO Alert Sent (Email)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "CEO Alert Sent (WhatsApp)",
+              "displayName": "CEO Alert Sent (WhatsApp)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Field 44",
+              "displayName": "Field 44",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Stock Updated",
+              "displayName": "Stock Updated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Last Modified",
+              "displayName": "Last Modified",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Last Modified By",
+              "displayName": "Last Modified By",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer Delivery Choice",
+              "displayName": "Customer Delivery Choice",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Pending",
+                  "value": "Pending"
+                },
+                {
+                  "name": "Pickup",
+                  "value": "Pickup"
+                },
+                {
+                  "name": "Delivery",
+                  "value": "Delivery"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivery Address",
+              "displayName": "Delivery Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lead Type",
+              "displayName": "Lead Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Date Completed",
+              "displayName": "Date Completed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date Delivered/Collected",
+              "displayName": "Date Delivered/Collected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date Approved",
+              "displayName": "Date Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Payment Status",
+              "displayName": "Payment Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Awaiting Invoice",
+                  "value": "Awaiting Invoice"
+                },
+                {
+                  "name": "Unpaid",
+                  "value": "Unpaid"
+                },
+                {
+                  "name": "Deposit Paid",
+                  "value": "Deposit Paid"
+                },
+                {
+                  "name": "Fully Paid",
+                  "value": "Fully Paid"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1296,
+        112
+      ],
+      "id": "832c26e6-19c3-4680-b9e9-32f095eaf423",
+      "name": "Update record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "zCWbnEOG9v1KlWrO",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appJ6aBoii1ImdfSz",
+          "mode": "list",
+          "cachedResultName": "RecklessBear Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblqYBLNQf8QMyWa5",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Lead ID": "={{ $('Search records').item.json[\"Lead ID\"] }}",
+            "Production Stage": "Cleaning & Packing"
+          },
+          "matchingColumns": [
+            "Lead ID"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lead ID",
+              "displayName": "Lead ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Organization",
+              "displayName": "Organization",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sales Status",
+              "displayName": "Sales Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "Assigned",
+                  "value": "Assigned"
+                },
+                {
+                  "name": "Contacted",
+                  "value": "Contacted"
+                },
+                {
+                  "name": "Quote Sent",
+                  "value": "Quote Sent"
+                },
+                {
+                  "name": "Quote Approved",
+                  "value": "Quote Approved"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Is Active",
+              "displayName": "Is Active",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Completed Flag",
+              "displayName": "Completed Flag",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Accessories Selected",
+              "displayName": "Accessories Selected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Product Type",
+              "displayName": "Product Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Include Warmups",
+              "displayName": "Include Warmups",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quantity Range",
+              "displayName": "Quantity Range",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has Deadline",
+              "displayName": "Has Deadline",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivery Date",
+              "displayName": "Delivery Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Attachments",
+              "displayName": "Attachments",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Submission Date",
+              "displayName": "Submission Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Preffered Contact Method",
+              "displayName": "Preffered Contact Method",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "WhatsApp",
+                  "value": "WhatsApp"
+                },
+                {
+                  "name": "Email & WhatsApp",
+                  "value": "Email & WhatsApp"
+                },
+                {
+                  "name": "Phone call",
+                  "value": "Phone call"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Assigned Rep",
+              "displayName": "Assigned Rep",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Name (from Assigned Rep)",
+              "displayName": "Name (from Assigned Rep)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Alert Sent",
+              "displayName": "Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Rep Name",
+              "displayName": "Rep Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "WhatsApp Alert",
+              "displayName": "WhatsApp Alert",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Alert Sent",
+              "displayName": "Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WhatsApp Follow-up Alert Sent",
+              "displayName": "WhatsApp Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Booking Time",
+              "displayName": "Booking Time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Booking Approved",
+              "displayName": "Booking Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quote Form Submitted",
+              "displayName": "Quote Form Submitted",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Design Notes",
+              "displayName": "Design Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Card Created",
+              "displayName": "Card Created",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Production Stage",
+              "displayName": "Production Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Order Awaiting Confirmation",
+                  "value": "Order Awaiting Confirmation"
+                },
+                {
+                  "name": "Designing",
+                  "value": "Designing"
+                },
+                {
+                  "name": "Layout Department",
+                  "value": "Layout Department"
+                },
+                {
+                  "name": "Print & Press Department",
+                  "value": "Print & Press Department"
+                },
+                {
+                  "name": "Manufacturing Department",
+                  "value": "Manufacturing Department"
+                },
+                {
+                  "name": "Cleaning & Packing",
+                  "value": "Cleaning & Packing"
+                },
+                {
+                  "name": "Ready for Dispatch/Collection",
+                  "value": "Ready for Dispatch/Collection"
+                },
+                {
+                  "name": "Out for Delivery",
+                  "value": "Out for Delivery"
+                },
+                {
+                  "name": "Delivered/Collected",
+                  "value": "Delivered/Collected"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Last Stage Update Sent",
+              "displayName": "Last Stage Update Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has requested quote",
+              "displayName": "Has requested quote",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has booked call",
+              "displayName": "Has booked call",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Has asked question",
+              "displayName": "Has asked question",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Question",
+              "displayName": "Question",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Pre call notes",
+              "displayName": "Pre call notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "48h Follow-up Alert Sent",
+              "displayName": "48h Follow-up Alert Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "48h Follow-up WhatsApp Sent",
+              "displayName": "48h Follow-up WhatsApp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "CEO Alert Sent (Email)",
+              "displayName": "CEO Alert Sent (Email)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "CEO Alert Sent (WhatsApp)",
+              "displayName": "CEO Alert Sent (WhatsApp)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Field 44",
+              "displayName": "Field 44",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Stock Updated",
+              "displayName": "Stock Updated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Last Modified",
+              "displayName": "Last Modified",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Last Modified By",
+              "displayName": "Last Modified By",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Customer Delivery Choice",
+              "displayName": "Customer Delivery Choice",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Pending",
+                  "value": "Pending"
+                },
+                {
+                  "name": "Pickup",
+                  "value": "Pickup"
+                },
+                {
+                  "name": "Delivery",
+                  "value": "Delivery"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivery Address",
+              "displayName": "Delivery Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lead Type",
+              "displayName": "Lead Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Date Completed",
+              "displayName": "Date Completed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date Delivered/Collected",
+              "displayName": "Date Delivered/Collected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date Approved",
+              "displayName": "Date Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Payment Status",
+              "displayName": "Payment Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Awaiting Invoice",
+                  "value": "Awaiting Invoice"
+                },
+                {
+                  "name": "Unpaid",
+                  "value": "Unpaid"
+                },
+                {
+                  "name": "Deposit Paid",
+                  "value": "Deposit Paid"
+                },
+                {
+                  "name": "Fully Paid",
+                  "value": "Fully Paid"
+                },
+                {
+                  "name": "Refunded",
+                  "value": "Refunded"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1296,
+        -96
+      ],
+      "id": "f88178d7-53de-4766-92ad-298f0b6f7740",
+      "name": "Update record1",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "zCWbnEOG9v1KlWrO",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\n// Get the entire input data object from the previous node.\nconst inputData = $input.first().json;\n\n\n// --- Phone Number Formatting ---\n\n// Get the phone number using your variable.\nconst rawPhone = inputData.Phone;\nlet formattedPhoneNumber = \"\"; \n\nif (rawPhone) {\n  const digitsOnly = rawPhone.replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = rawPhone;\n  }\n}\n\n\n// --- Lead ID Formatting (UPDATED TO BE BOLD) ---\n\n// Get the Lead ID using your variable.\nconst rawLeadId = inputData[\"Lead ID\"];\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  // This wraps the ID in single asterisks for WhatsApp's BOLD format.\n  formattedLeadId = '*' + rawLeadId + '*';\n}\n\n\n// --- Final Output ---\n\n// Add our two prepared fields to the data object.\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\n// Return the data for the next node to use.\nreturn inputData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "d0004d38-84c0-4a65-a200-4c70110defe3",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "packing-update",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "f6fbc79a-f7fc-4d3b-a75d-2f4aa2b31c7f",
+      "name": "Webhook",
+      "webhookId": "03a9a70e-09e7-4fec-9b6b-245b84ac55fe"
+    }
+  ],
+  "connections": {
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Update record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Update record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Is WhatsApp?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Windhoek",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:Google Sheets Trigger": {
+      "documentId": "1S2wM25G6cWww_zj0Talh0otsG_hGd479Yrl9HI35zbs",
+      "sheetId": 2054033247,
+      "lastRevision": 181,
+      "lastRevisionLink": "https://docs.google.com/spreadsheets/export?id=1S2wM25G6cWww_zj0Talh0otsG_hGd479Yrl9HI35zbs&revision=181&exportFormat=xlsx"
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+  "activeVersionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+  "versionCounter": 3,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2025-06-30T09:38:00.589Z",
+      "createdAt": "2025-06-30T09:38:00.589Z",
+      "role": "workflow:owner",
+      "workflowId": "JAcCzcs71tIcEkca",
+      "projectId": "gPhHmLtiXo46c5ZG",
+      "project": {
+        "updatedAt": "2025-06-15T12:30:47.705Z",
+        "createdAt": "2025-06-15T12:24:47.989Z",
+        "id": "gPhHmLtiXo46c5ZG",
+        "name": "Christiaan Steffen <streamline.automations.hq@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-06-15T12:24:47.989Z",
+            "createdAt": "2025-06-15T12:24:47.989Z",
+            "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+            "projectId": "gPhHmLtiXo46c5ZG",
+            "user": {
+              "updatedAt": "2026-02-16T05:08:07.000Z",
+              "createdAt": "2025-06-15T12:24:47.128Z",
+              "id": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+              "email": "streamline.automations.hq@gmail.com",
+              "firstName": "Christiaan",
+              "lastName": "Steffen",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-15T12:30:57.271Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "companySize": "20-99",
+                "companyType": "systems-integrator",
+                "role": "data-science",
+                "reportedSource": "podcast"
+              },
+              "settings": {
+                "userActivated": true,
+                "firstSuccessfulWorkflowId": "wSMzEawdSCDBgjzy",
+                "userActivatedAt": 1750064697743,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1770011677833
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-02-16",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-13T12:02:38.000Z",
+    "createdAt": "2025-11-28T15:28:50.474Z",
+    "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+    "workflowId": "JAcCzcs71tIcEkca",
+    "nodes": [
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json[\"Preffered Contact Method\"] }}",
+                "operation": "isNotEmpty"
+              }
+            ]
+          }
+        },
+        "name": "Is WhatsApp?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          848,
+          0
+        ],
+        "id": "8310ef43-a382-417b-aad2-5b7ae86a16ad"
+      },
+      {
+        "parameters": {
+          "fromEmail": "etienne@recklessbear.co.za",
+          "toEmail": "={{ $json.Email }}",
+          "subject": "Order Update – Now Being Packed",
+          "text": "=Hi {{ $json.Name }},\n\nYour order is being carefully packed and prepped for delivery.\n\nTo ensure a smooth hand-off, please let us know:\nWould you prefer to have your order DELIVERED, or will you PICK IT UP from our premises?\n\nPlease reply to this email with 'DELIVER' or 'PICKUP'.\n\nWe’ll let you know as soon as it’s with the courier, or ready for collection!\n\nRegards,  \nRecklessBear Team",
+          "options": {}
+        },
+        "name": "Send Email",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 1,
+        "position": [
+          1072,
+          -96
+        ],
+        "id": "17025564-7740-4f19-908b-b43a0d02e402",
+        "credentials": {
+          "smtp": {
+            "id": "cOz8e6I3gQhuTe0o",
+            "name": "SMTP account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "value": "appJ6aBoii1ImdfSz",
+            "mode": "list",
+            "cachedResultName": "RecklessBear Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblqYBLNQf8QMyWa5",
+            "mode": "list",
+            "cachedResultName": "Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+          },
+          "filterByFormula": "=TRIM({Lead ID}) = TRIM(\"{{ $json.lead_id }}\")",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          432,
+          0
+        ],
+        "id": "8645881c-18a1-42de-999f-64a7872c88e6",
+        "name": "Search records",
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "zCWbnEOG9v1KlWrO",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://backend.aisensy.com/campaign/t1/api/v2",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"apiKey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTMxOGUxZTc2NGY5MGMwZWM5MTA2ZiIsIm5hbWUiOiJSZWNrbGVzc2JlYXIiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjg5MzE4ZTFlNzY0ZjkwYzBlYzkxMDY3IiwiYWN0aXZlUGxhbiI6IkZSRUVfRk9SRVZFUiIsImlhdCI6MTc1NDQ3MDYyNX0.RrP9EuL5wTm69QZdyhnKt9UdOoz8c7jQbpR25lftLqY\",\n  \"campaignName\": \"Packing Update & Dispatch Choice\",\n  \"destination\": \"{{ $json.FormattedPhone }}\",\n  \"userName\": \"{{ $json.Name }}\",\n  \"templateParams\": [\n    \"{{ $json.Name }}\",\n    \"{{ $json.FormattedLeadId }}\"\n  ],\n  \"source\": \"new-landing-page form\",\n  \"media\": {},\n  \"buttons\": [],\n  \"carouselCards\": [],\n  \"location\": {},\n  \"attributes\": {},\n  \"paramsFallbackValue\": {\n    \"FirstName\": \"user\"\n  }\n} ",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1072,
+          112
+        ],
+        "id": "480a064c-4e68-4887-8c12-9f881d8ff551",
+        "name": "HTTP Request",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "base": {
+            "__rl": true,
+            "value": "appJ6aBoii1ImdfSz",
+            "mode": "list",
+            "cachedResultName": "RecklessBear Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblqYBLNQf8QMyWa5",
+            "mode": "list",
+            "cachedResultName": "Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Lead ID": "={{ $('Search records').item.json[\"Lead ID\"] }}",
+              "Production Stage": "Cleaning & Packing"
+            },
+            "matchingColumns": [
+              "Lead ID"
+            ],
+            "schema": [
+              {
+                "id": "id",
+                "displayName": "id",
+                "required": false,
+                "defaultMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Lead ID",
+                "displayName": "Lead ID",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Name",
+                "displayName": "Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Organization",
+                "displayName": "Organization",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Sales Status",
+                "displayName": "Sales Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "New",
+                    "value": "New"
+                  },
+                  {
+                    "name": "Assigned",
+                    "value": "Assigned"
+                  },
+                  {
+                    "name": "Contacted",
+                    "value": "Contacted"
+                  },
+                  {
+                    "name": "Quote Sent",
+                    "value": "Quote Sent"
+                  },
+                  {
+                    "name": "Quote Approved",
+                    "value": "Quote Approved"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Is Active",
+                "displayName": "Is Active",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Completed Flag",
+                "displayName": "Completed Flag",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Category",
+                "displayName": "Category",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Phone",
+                "displayName": "Phone",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Accessories Selected",
+                "displayName": "Accessories Selected",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Product Type",
+                "displayName": "Product Type",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Include Warmups",
+                "displayName": "Include Warmups",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Quantity Range",
+                "displayName": "Quantity Range",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has Deadline",
+                "displayName": "Has Deadline",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Delivery Date",
+                "displayName": "Delivery Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Location",
+                "displayName": "Location",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Attachments",
+                "displayName": "Attachments",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Submission Date",
+                "displayName": "Submission Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Preffered Contact Method",
+                "displayName": "Preffered Contact Method",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Email",
+                    "value": "Email"
+                  },
+                  {
+                    "name": "WhatsApp",
+                    "value": "WhatsApp"
+                  },
+                  {
+                    "name": "Email & WhatsApp",
+                    "value": "Email & WhatsApp"
+                  },
+                  {
+                    "name": "Phone call",
+                    "value": "Phone call"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Message",
+                "displayName": "Message",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Assigned Rep",
+                "displayName": "Assigned Rep",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Name (from Assigned Rep)",
+                "displayName": "Name (from Assigned Rep)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Alert Sent",
+                "displayName": "Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Rep Name",
+                "displayName": "Rep Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "WhatsApp Alert",
+                "displayName": "WhatsApp Alert",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Follow-up Alert Sent",
+                "displayName": "Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "WhatsApp Follow-up Alert Sent",
+                "displayName": "WhatsApp Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Booking Time",
+                "displayName": "Booking Time",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Booking Approved",
+                "displayName": "Booking Approved",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Quote Form Submitted",
+                "displayName": "Quote Form Submitted",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Design Notes",
+                "displayName": "Design Notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Card Created",
+                "displayName": "Card Created",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Production Stage",
+                "displayName": "Production Stage",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Order Awaiting Confirmation",
+                    "value": "Order Awaiting Confirmation"
+                  },
+                  {
+                    "name": "Designing",
+                    "value": "Designing"
+                  },
+                  {
+                    "name": "Layout Department",
+                    "value": "Layout Department"
+                  },
+                  {
+                    "name": "Print & Press Department",
+                    "value": "Print & Press Department"
+                  },
+                  {
+                    "name": "Manufacturing Department",
+                    "value": "Manufacturing Department"
+                  },
+                  {
+                    "name": "Cleaning & Packing",
+                    "value": "Cleaning & Packing"
+                  },
+                  {
+                    "name": "Ready for Dispatch/Collection",
+                    "value": "Ready for Dispatch/Collection"
+                  },
+                  {
+                    "name": "Out for Delivery",
+                    "value": "Out for Delivery"
+                  },
+                  {
+                    "name": "Delivered/Collected",
+                    "value": "Delivered/Collected"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Last Stage Update Sent",
+                "displayName": "Last Stage Update Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has requested quote",
+                "displayName": "Has requested quote",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has booked call",
+                "displayName": "Has booked call",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has asked question",
+                "displayName": "Has asked question",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Question",
+                "displayName": "Question",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Pre call notes",
+                "displayName": "Pre call notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "48h Follow-up Alert Sent",
+                "displayName": "48h Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "48h Follow-up WhatsApp Sent",
+                "displayName": "48h Follow-up WhatsApp Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "CEO Alert Sent (Email)",
+                "displayName": "CEO Alert Sent (Email)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "CEO Alert Sent (WhatsApp)",
+                "displayName": "CEO Alert Sent (WhatsApp)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Field 44",
+                "displayName": "Field 44",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Stock Updated",
+                "displayName": "Stock Updated",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Last Modified",
+                "displayName": "Last Modified",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Last Modified By",
+                "displayName": "Last Modified By",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Customer Delivery Choice",
+                "displayName": "Customer Delivery Choice",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Pending",
+                    "value": "Pending"
+                  },
+                  {
+                    "name": "Pickup",
+                    "value": "Pickup"
+                  },
+                  {
+                    "name": "Delivery",
+                    "value": "Delivery"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Delivery Address",
+                "displayName": "Delivery Address",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Lead Type",
+                "displayName": "Lead Type",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Date Completed",
+                "displayName": "Date Completed",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Date Delivered/Collected",
+                "displayName": "Date Delivered/Collected",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Date Approved",
+                "displayName": "Date Approved",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Payment Status",
+                "displayName": "Payment Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Awaiting Invoice",
+                    "value": "Awaiting Invoice"
+                  },
+                  {
+                    "name": "Unpaid",
+                    "value": "Unpaid"
+                  },
+                  {
+                    "name": "Deposit Paid",
+                    "value": "Deposit Paid"
+                  },
+                  {
+                    "name": "Fully Paid",
+                    "value": "Fully Paid"
+                  },
+                  {
+                    "name": "Refunded",
+                    "value": "Refunded"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          1296,
+          112
+        ],
+        "id": "832c26e6-19c3-4680-b9e9-32f095eaf423",
+        "name": "Update record",
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "zCWbnEOG9v1KlWrO",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "base": {
+            "__rl": true,
+            "value": "appJ6aBoii1ImdfSz",
+            "mode": "list",
+            "cachedResultName": "RecklessBear Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblqYBLNQf8QMyWa5",
+            "mode": "list",
+            "cachedResultName": "Leads",
+            "cachedResultUrl": "https://airtable.com/appJ6aBoii1ImdfSz/tblqYBLNQf8QMyWa5"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Lead ID": "={{ $('Search records').item.json[\"Lead ID\"] }}",
+              "Production Stage": "Cleaning & Packing"
+            },
+            "matchingColumns": [
+              "Lead ID"
+            ],
+            "schema": [
+              {
+                "id": "id",
+                "displayName": "id",
+                "required": false,
+                "defaultMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Lead ID",
+                "displayName": "Lead ID",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Name",
+                "displayName": "Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Organization",
+                "displayName": "Organization",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Sales Status",
+                "displayName": "Sales Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "New",
+                    "value": "New"
+                  },
+                  {
+                    "name": "Assigned",
+                    "value": "Assigned"
+                  },
+                  {
+                    "name": "Contacted",
+                    "value": "Contacted"
+                  },
+                  {
+                    "name": "Quote Sent",
+                    "value": "Quote Sent"
+                  },
+                  {
+                    "name": "Quote Approved",
+                    "value": "Quote Approved"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Is Active",
+                "displayName": "Is Active",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Completed Flag",
+                "displayName": "Completed Flag",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Category",
+                "displayName": "Category",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Phone",
+                "displayName": "Phone",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Accessories Selected",
+                "displayName": "Accessories Selected",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Product Type",
+                "displayName": "Product Type",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Include Warmups",
+                "displayName": "Include Warmups",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Quantity Range",
+                "displayName": "Quantity Range",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has Deadline",
+                "displayName": "Has Deadline",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Delivery Date",
+                "displayName": "Delivery Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Location",
+                "displayName": "Location",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Attachments",
+                "displayName": "Attachments",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Submission Date",
+                "displayName": "Submission Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Preffered Contact Method",
+                "displayName": "Preffered Contact Method",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Email",
+                    "value": "Email"
+                  },
+                  {
+                    "name": "WhatsApp",
+                    "value": "WhatsApp"
+                  },
+                  {
+                    "name": "Email & WhatsApp",
+                    "value": "Email & WhatsApp"
+                  },
+                  {
+                    "name": "Phone call",
+                    "value": "Phone call"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Message",
+                "displayName": "Message",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Assigned Rep",
+                "displayName": "Assigned Rep",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Name (from Assigned Rep)",
+                "displayName": "Name (from Assigned Rep)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Alert Sent",
+                "displayName": "Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Rep Name",
+                "displayName": "Rep Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "WhatsApp Alert",
+                "displayName": "WhatsApp Alert",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Follow-up Alert Sent",
+                "displayName": "Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "WhatsApp Follow-up Alert Sent",
+                "displayName": "WhatsApp Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Booking Time",
+                "displayName": "Booking Time",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Booking Approved",
+                "displayName": "Booking Approved",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Quote Form Submitted",
+                "displayName": "Quote Form Submitted",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Design Notes",
+                "displayName": "Design Notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Card Created",
+                "displayName": "Card Created",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Production Stage",
+                "displayName": "Production Stage",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Order Awaiting Confirmation",
+                    "value": "Order Awaiting Confirmation"
+                  },
+                  {
+                    "name": "Designing",
+                    "value": "Designing"
+                  },
+                  {
+                    "name": "Layout Department",
+                    "value": "Layout Department"
+                  },
+                  {
+                    "name": "Print & Press Department",
+                    "value": "Print & Press Department"
+                  },
+                  {
+                    "name": "Manufacturing Department",
+                    "value": "Manufacturing Department"
+                  },
+                  {
+                    "name": "Cleaning & Packing",
+                    "value": "Cleaning & Packing"
+                  },
+                  {
+                    "name": "Ready for Dispatch/Collection",
+                    "value": "Ready for Dispatch/Collection"
+                  },
+                  {
+                    "name": "Out for Delivery",
+                    "value": "Out for Delivery"
+                  },
+                  {
+                    "name": "Delivered/Collected",
+                    "value": "Delivered/Collected"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Last Stage Update Sent",
+                "displayName": "Last Stage Update Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has requested quote",
+                "displayName": "Has requested quote",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has booked call",
+                "displayName": "Has booked call",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Has asked question",
+                "displayName": "Has asked question",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Question",
+                "displayName": "Question",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Pre call notes",
+                "displayName": "Pre call notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "48h Follow-up Alert Sent",
+                "displayName": "48h Follow-up Alert Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "48h Follow-up WhatsApp Sent",
+                "displayName": "48h Follow-up WhatsApp Sent",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "CEO Alert Sent (Email)",
+                "displayName": "CEO Alert Sent (Email)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "CEO Alert Sent (WhatsApp)",
+                "displayName": "CEO Alert Sent (WhatsApp)",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Field 44",
+                "displayName": "Field 44",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Stock Updated",
+                "displayName": "Stock Updated",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Last Modified",
+                "displayName": "Last Modified",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Last Modified By",
+                "displayName": "Last Modified By",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Customer Delivery Choice",
+                "displayName": "Customer Delivery Choice",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Pending",
+                    "value": "Pending"
+                  },
+                  {
+                    "name": "Pickup",
+                    "value": "Pickup"
+                  },
+                  {
+                    "name": "Delivery",
+                    "value": "Delivery"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Delivery Address",
+                "displayName": "Delivery Address",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Lead Type",
+                "displayName": "Lead Type",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Date Completed",
+                "displayName": "Date Completed",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Date Delivered/Collected",
+                "displayName": "Date Delivered/Collected",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Date Approved",
+                "displayName": "Date Approved",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Payment Status",
+                "displayName": "Payment Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Awaiting Invoice",
+                    "value": "Awaiting Invoice"
+                  },
+                  {
+                    "name": "Unpaid",
+                    "value": "Unpaid"
+                  },
+                  {
+                    "name": "Deposit Paid",
+                    "value": "Deposit Paid"
+                  },
+                  {
+                    "name": "Fully Paid",
+                    "value": "Fully Paid"
+                  },
+                  {
+                    "name": "Refunded",
+                    "value": "Refunded"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          1296,
+          -96
+        ],
+        "id": "f88178d7-53de-4766-92ad-298f0b6f7740",
+        "name": "Update record1",
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "zCWbnEOG9v1KlWrO",
+            "name": "Airtable Personal Access Token account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// This code formats the phone number and makes the Lead ID BOLD.\n\n// Get the entire input data object from the previous node.\nconst inputData = $input.first().json;\n\n\n// --- Phone Number Formatting ---\n\n// Get the phone number using your variable.\nconst rawPhone = inputData.Phone;\nlet formattedPhoneNumber = \"\"; \n\nif (rawPhone) {\n  const digitsOnly = rawPhone.replace(/\\D/g, '');\n  if (digitsOnly.length >= 9 && digitsOnly.startsWith('0')) {\n    formattedPhoneNumber = '+27' + digitsOnly.slice(1);\n  } else if (digitsOnly.length >= 11 && digitsOnly.startsWith('27')) {\n    formattedPhoneNumber = '+' + digitsOnly;\n  } else {\n    formattedPhoneNumber = rawPhone;\n  }\n}\n\n\n// --- Lead ID Formatting (UPDATED TO BE BOLD) ---\n\n// Get the Lead ID using your variable.\nconst rawLeadId = inputData[\"Lead ID\"];\nlet formattedLeadId = \"\";\n\nif (rawLeadId) {\n  // This wraps the ID in single asterisks for WhatsApp's BOLD format.\n  formattedLeadId = '*' + rawLeadId + '*';\n}\n\n\n// --- Final Output ---\n\n// Add our two prepared fields to the data object.\ninputData.FormattedPhone = formattedPhoneNumber;\ninputData.FormattedLeadId = formattedLeadId;\n\n// Return the data for the next node to use.\nreturn inputData;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          640,
+          0
+        ],
+        "id": "d0004d38-84c0-4a65-a200-4c70110defe3",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "packing-update",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          240,
+          0
+        ],
+        "id": "f6fbc79a-f7fc-4d3b-a75d-2f4aa2b31c7f",
+        "name": "Webhook",
+        "webhookId": "03a9a70e-09e7-4fec-9b6b-245b84ac55fe"
+      }
+    ],
+    "connections": {
+      "Search records": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is WhatsApp?": {
+        "main": [
+          [
+            {
+              "node": "Send Email",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Update record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Email": {
+        "main": [
+          [
+            {
+              "node": "Update record1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Is WhatsApp?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "system migration",
+    "name": "Version 137a2aab",
+    "description": "",
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-13T12:02:38.138Z",
+        "id": 139,
+        "workflowId": "JAcCzcs71tIcEkca",
+        "versionId": "137a2aab-dde3-4c74-b84e-db8f3c867d92",
+        "event": "activated",
+        "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f"
+      }
+    ]
+  }
+}

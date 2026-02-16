@@ -184,7 +184,6 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
   const [isAssignPending, startAssignTransition] = useTransition();
   const [isDeletePending, startDeleteTransition] = useTransition();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const realtimeRefreshTimerRef = useRef<number | null>(null);
 
@@ -558,14 +557,6 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
-            className="min-h-[44px]"
-            onClick={() => setAdvancedOpen((v) => !v)}
-          >
-            Advanced Filters
-          </Button>
-          <Button
-            type="button"
             variant={viewMode === "cards" ? "default" : "outline"}
             className="min-h-[44px] gap-2"
             onClick={() => setViewMode("cards")}
@@ -591,90 +582,88 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         )}
       </div>
 
-      {advancedOpen && (
-        <Card>
-          <CardContent className="p-4 sm:p-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label>Search</Label>
-                <Input
-                  type="search"
-                  placeholder="Search by name, email, phone, org, or lead ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="min-h-[44px] mt-2"
-                />
-              </div>
-
-              <div>
-                <Label>Status</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="min-h-[44px] mt-2">
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {statuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Rep</Label>
-                <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter} disabled={reps.length === 0}>
-                  <SelectTrigger className="min-h-[44px] mt-2">
-                    <SelectValue placeholder="All reps" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Reps</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {reps.map((rep) => (
-                      <SelectItem key={rep.id} value={rep.id}>
-                        {rep.name || rep.email || rep.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Sort</Label>
-                <Select value={sortBy} onValueChange={(value: "updated" | "submitted") => setSortBy(value)}>
-                  <SelectTrigger className="min-h-[44px] mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="updated">Updated</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      <Card>
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label>Search</Label>
+              <Input
+                type="search"
+                placeholder="Search by name, email, phone, org, or lead ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="min-h-[44px] mt-2"
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label>Intent</Label>
-              <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
-                {["Quote", "Booking", "Question"].map((intent) => (
-                  <div key={intent} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`intent-${intent}`}
-                      checked={intentFilters.has(intent)}
-                      onCheckedChange={() => toggleIntentFilter(intent)}
-                    />
-                    <Label htmlFor={`intent-${intent}`} className="font-normal cursor-pointer">
-                      {intent}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="min-h-[44px] mt-2">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      )}
+
+            <div>
+              <Label>Rep</Label>
+              <Select value={assignedRepFilter} onValueChange={setAssignedRepFilter} disabled={reps.length === 0}>
+                <SelectTrigger className="min-h-[44px] mt-2">
+                  <SelectValue placeholder="All reps" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Reps</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {reps.map((rep) => (
+                    <SelectItem key={rep.id} value={rep.id}>
+                      {rep.name || rep.email || rep.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Sort</Label>
+              <Select value={sortBy} onValueChange={(value: "updated" | "submitted") => setSortBy(value)}>
+                <SelectTrigger className="min-h-[44px] mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="updated">Updated</SelectItem>
+                  <SelectItem value="submitted">Submitted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Intent</Label>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+              {["Quote", "Booking", "Question"].map((intent) => (
+                <div key={intent} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`intent-${intent}`}
+                    checked={intentFilters.has(intent)}
+                    onCheckedChange={() => toggleIntentFilter(intent)}
+                  />
+                  <Label htmlFor={`intent-${intent}`} className="font-normal cursor-pointer">
+                    {intent}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
         {focusFilteredLeads.length === 0 ? (

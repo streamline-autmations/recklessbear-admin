@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { updateUserAction } from "./actions";
+import { deleteUserAction, updateUserAction } from "./actions";
 
 interface Profile {
   user_id: string;
@@ -26,9 +26,10 @@ interface Profile {
 
 interface UsersTableEditProps {
   user: Profile;
+  canDelete?: boolean;
 }
 
-export function UsersTableEdit({ user: initialUser }: UsersTableEditProps) {
+export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTableEditProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(initialUser.full_name || "");
@@ -64,6 +65,27 @@ export function UsersTableEdit({ user: initialUser }: UsersTableEditProps) {
     setRole(initialUser.role);
     setError(null);
     setIsEditing(false);
+  }
+
+  function handleDelete() {
+    const label = initialUser.email || initialUser.full_name || "this user";
+    const confirmed = window.confirm(`Delete ${label}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setError(null);
+    const formData = new FormData();
+    formData.set("userId", initialUser.user_id);
+
+    startTransition(async () => {
+      const result = await deleteUserAction(formData);
+      if (result && "error" in result) {
+        setError(result.error);
+        toast.error(result.error);
+      } else {
+        toast.success("User deleted successfully");
+        router.refresh();
+      }
+    });
   }
 
   if (isEditing) {
@@ -133,14 +155,28 @@ export function UsersTableEdit({ user: initialUser }: UsersTableEditProps) {
         </span>
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsEditing(true)}
-          className="min-h-[44px]"
-        >
-          Edit
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEditing(true)}
+            disabled={isPending}
+            className="min-h-[44px]"
+          >
+            Edit
+          </Button>
+          {canDelete ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isPending}
+              className="min-h-[44px]"
+            >
+              Delete
+            </Button>
+          ) : null}
+        </div>
       </TableCell>
     </TableRow>
   );

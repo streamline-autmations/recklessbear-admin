@@ -1,0 +1,384 @@
+{
+  "updatedAt": "2026-02-16T06:56:20.702Z",
+  "createdAt": "2026-02-16T06:56:17.287Z",
+  "id": "6iQK4zXmDIwNYqcp",
+  "name": "Admin Copilot Query (Read-only)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin-copilot-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "webhook_admin_copilot_query",
+      "name": "Webhook (admin-copilot-query)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const req = $input.item.json || {};\nconst headers = (req.headers && typeof req.headers === 'object') ? req.headers : {};\nconst expectedRaw = $env.ADMIN_COPILOT_SECRET;\nconst gotRaw = headers['x-admin-secret'] ?? headers['X-Admin-Secret'] ?? null;\n\nconst normalize = (v) => String(v || '').trim().replace(/^Bearer\\s+/i, '');\nconst expected = normalize(expectedRaw);\nconst got = normalize(gotRaw);\n\nif (!expected) {\n  return { json: { authorized: false, success: false, error: 'Server not configured', statusCode: 500 } };\n}\n\nif (!got || got !== expected) {\n  return { json: { authorized: false, success: false, error: 'Unauthorized', statusCode: 401 } };\n}\n\nreturn { json: { authorized: true, body: req.body || {} } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ],
+      "id": "code_validate_secret",
+      "name": "Validate Secret"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.authorized === true }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "id": "if_authorized",
+      "name": "Authorized?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: $json.error || 'Unauthorized' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 401 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        960,
+        160
+      ],
+      "id": "respond_unauthorized",
+      "name": "Respond (unauthorized)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json?.body ?? {};\n\nconst table = typeof body.table === 'string' ? body.table.trim() : '';\nconst select = typeof body.select === 'string' ? body.select.trim() : '';\nconst filterColumn = typeof body.filterColumn === 'string' ? body.filterColumn.trim() : '';\nconst filterValue = typeof body.filterValue === 'string' ? body.filterValue.trim() : '';\n\nconst allowedTables = new Set(['leads', 'jobs', 'users', 'wa_conversations', 'wa_messages']);\n\nif (!table || !select) {\n  return { json: { input_valid: false, success: false, error: 'Invalid input', statusCode: 400 } };\n}\n\nif (!allowedTables.has(table)) {\n  return { json: { input_valid: false, success: false, error: 'Table not allowed', statusCode: 400 } };\n}\n\nconst hay = `${table} ${select} ${filterColumn}`.toLowerCase();\nconst forbidden = [';', '--', 'drop', 'insert', 'update', 'delete'];\nif (forbidden.some((t) => hay.includes(t))) {\n  return { json: { input_valid: false, success: false, error: 'Invalid query', statusCode: 400 } };\n}\n\nconst safeIdent = (s) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s);\nconst safeSelect = (s) => /^[a-zA-Z0-9_.*(),\\s]+$/.test(s);\n\nif (!safeIdent(table)) {\n  return { json: { input_valid: false, success: false, error: 'Invalid table', statusCode: 400 } };\n}\n\nif (!safeSelect(select) || select.length > 200) {\n  return { json: { input_valid: false, success: false, error: 'Invalid select', statusCode: 400 } };\n}\n\nif (filterColumn && !safeIdent(filterColumn)) {\n  return { json: { input_valid: false, success: false, error: 'Invalid filterColumn', statusCode: 400 } };\n}\n\nreturn {\n  json: {\n    input_valid: true,\n    table,\n    select,\n    filterColumn: filterColumn || null,\n    filterValue: filterValue || null\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ],
+      "id": "code_validate_input",
+      "name": "Validate Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.input_valid === true }}",
+              "value2": true
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "if_input_valid",
+      "name": "Input valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: $json.error || 'Invalid input' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 400 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        160
+      ],
+      "id": "respond_invalid_input",
+      "name": "Respond (invalid input)"
+    },
+    {
+      "parameters": {
+        "url": "={{\n  (\n    ($env.SUPABASE_URL || $env.NEXT_PUBLIC_SUPABASE_URL) +\n    '/rest/v1/' +\n    $json.table +\n    '?select=' +\n    encodeURIComponent($json.select) +\n    (\n      $json.filterColumn && $json.filterValue\n        ? '&' + $json.filterColumn + '=eq.' + encodeURIComponent($json.filterValue)\n        : ''\n    ) +\n    '&limit=20'\n  )\n}}",
+        "method": "GET",
+        "authentication": "none",
+        "options": {
+          "fullResponse": true
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY || $env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + ($env.SUPABASE_ANON_KEY || $env.NEXT_PUBLIC_SUPABASE_ANON_KEY) }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1440,
+        300
+      ],
+      "continueOnFail": true,
+      "id": "http_supabase_select",
+      "name": "HTTP – Supabase SELECT"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const res = $input.item.json || {};\nconst statusCode = Number(res.statusCode || 0);\nlet body = res.body;\n\nif (typeof body === 'string') {\n  try {\n    body = body ? JSON.parse(body) : null;\n  } catch {\n    body = body;\n  }\n}\n\nif (statusCode && (statusCode < 200 || statusCode >= 300)) {\n  const msg =\n    (body && typeof body === 'object' && (body.error || body.message))\n      ? String(body.error || body.message)\n      : (typeof body === 'string' && body.trim())\n        ? body\n        : 'Supabase request failed';\n\n  return { json: { success: false, error: msg, statusCode } };\n}\n\nconst results = Array.isArray(body) ? body : (body ? [body] : []);\n\nif (!results || results.length === 0) {\n  return { json: { success: true, count: 0, message: 'No records found', statusCode: 200 } };\n}\n\nreturn { json: { success: true, count: results.length, results, statusCode: 200 } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        300
+      ],
+      "id": "code_format_response",
+      "name": "Format Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 200 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        300
+      ],
+      "id": "respond_ok",
+      "name": "Respond (ok)"
+    }
+  ],
+  "connections": {
+    "Webhook (admin-copilot-query)": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Secret": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond (unauthorized)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input valid?": {
+      "main": [
+        [
+          {
+            "node": "HTTP – Supabase SELECT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond (invalid input)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP – Supabase SELECT": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond (ok)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "641d9042-3757-43d2-bbd6-1c814c1d6bf9",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-02-16T06:56:17.295Z",
+      "createdAt": "2026-02-16T06:56:17.295Z",
+      "role": "workflow:owner",
+      "workflowId": "6iQK4zXmDIwNYqcp",
+      "projectId": "gPhHmLtiXo46c5ZG",
+      "project": {
+        "updatedAt": "2025-06-15T12:30:47.705Z",
+        "createdAt": "2025-06-15T12:24:47.989Z",
+        "id": "gPhHmLtiXo46c5ZG",
+        "name": "Christiaan Steffen <streamline.automations.hq@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-06-15T12:24:47.989Z",
+            "createdAt": "2025-06-15T12:24:47.989Z",
+            "userId": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+            "projectId": "gPhHmLtiXo46c5ZG",
+            "user": {
+              "updatedAt": "2026-02-16T05:08:07.000Z",
+              "createdAt": "2025-06-15T12:24:47.128Z",
+              "id": "8295ca90-2df4-4fe6-894b-e00fddf6ff7f",
+              "email": "streamline.automations.hq@gmail.com",
+              "firstName": "Christiaan",
+              "lastName": "Steffen",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-15T12:30:57.271Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "companySize": "20-99",
+                "companyType": "systems-integrator",
+                "role": "data-science",
+                "reportedSource": "podcast"
+              },
+              "settings": {
+                "userActivated": true,
+                "firstSuccessfulWorkflowId": "wSMzEawdSCDBgjzy",
+                "userActivatedAt": 1750064697743,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1770011677833
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-02-16",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { WhatsAppConversation, WhatsAppMessage } from "@/types/inbox";
-import { getMessages, markConversationRead, sendMessageAction } from "./actions";
+import { detectChatAction, getMessages, markConversationRead, sendMessageAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,12 +10,14 @@ import { Search, Send, ArrowLeft, Phone, User, MessageSquare } from "lucide-reac
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface InboxClientProps {
   initialConversations: WhatsAppConversation[];
 }
 
 export default function InboxClient({ initialConversations }: InboxClientProps) {
+  const router = useRouter();
   const [conversations, setConversations] = useState<WhatsAppConversation[]>(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
@@ -24,12 +26,17 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
   const conversationsRef = useRef<WhatsAppConversation[]>(initialConversations);
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
+
+  useEffect(() => {
+    setConversations(initialConversations);
+  }, [initialConversations]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -140,6 +147,33 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSendMessage(e as unknown as React.FormEvent);
+    }
+  };
+
+  const handleDetectChat = async () => {
+    if (!selectedId || isDetecting) return;
+    setIsDetecting(true);
+    try {
+      const result = await detectChatAction(selectedId);
+      if (result && "error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      if (!result.matched) {
+        toast.message("No lead match found for this chat");
+        return;
+      }
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedId
+            ? { ...c, lead_id: result.lead_id, assigned_rep_id: result.assigned_rep_id }
+            : c
+        )
+      );
+      toast.success("Chat detected and linked");
+      router.refresh();
+    } finally {
+      setIsDetecting(false);
     }
   };
 
@@ -259,10 +293,20 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon" className="text-[#54656f] hover:text-[#111b21]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={handleDetectChat}
+                  disabled={isDetecting}
+                >
+                  {isDetecting ? "Detecting..." : "Detect Chat"}
+                </Button>
+                <Button variant="ghost" size="icon" className="hidden sm:inline-flex text-[#54656f] hover:text-[#111b21]">
                   <Phone className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-[#54656f] hover:text-[#111b21]">
+                <Button variant="ghost" size="icon" className="hidden sm:inline-flex text-[#54656f] hover:text-[#111b21]">
                   <User className="h-4 w-4" />
                 </Button>
               </div>
