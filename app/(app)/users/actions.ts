@@ -1,14 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
-function getAppBaseUrl() {
+async function getAppBaseUrl() {
   const explicit = process.env.NEXT_PUBLIC_BASE_URL;
   if (explicit) return explicit.replace(/\/+$/, "");
   const vercel = process.env.VERCEL_URL;
   if (vercel) return `https://${vercel}`.replace(/\/+$/, "");
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") || h.get("host");
+    if (host) {
+      const proto = h.get("x-forwarded-proto") || "https";
+      return `${proto}://${host}`.replace(/\/+$/, "");
+    }
+  } catch {
+  }
   if (process.env.NODE_ENV === "development") return "http://localhost:3000";
   return null;
 }
@@ -138,7 +148,7 @@ export async function createUserAction(
     },
   });
 
-  const baseUrl = getAppBaseUrl();
+  const baseUrl = await getAppBaseUrl();
   if (!baseUrl) {
     return { error: "Missing NEXT_PUBLIC_BASE_URL (or VERCEL_URL) for invite redirect" };
   }
@@ -236,6 +246,29 @@ export async function deleteUserAction(
       persistSession: false,
     },
   });
+
+  const nullOut = async (table: string, column: string) => {
+    try {
+      const { error } = await adminClient
+        .from(table)
+        .update({ [column]: null })
+        .eq(column, result.data.userId);
+      if (!error) return;
+      const msg = String(error.message || "").toLowerCase();
+      if (msg.includes("does not exist") || msg.includes("relation") || msg.includes("schema cache")) return;
+    } catch {
+    }
+  };
+
+  await Promise.all([
+    nullOut("leads", "assigned_rep_id"),
+    nullOut("lead_events", "actor_user_id"),
+    nullOut("lead_notes", "author_user_id"),
+    nullOut("wa_conversations", "assigned_rep_id"),
+    nullOut("wa_messages", "created_by"),
+    nullOut("stock_transactions", "created_by"),
+    nullOut("stock_movements", "created_by"),
+  ]);
 
   const { error: authError } = await adminClient.auth.admin.deleteUser(result.data.userId);
   if (authError) {

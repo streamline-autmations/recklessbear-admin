@@ -9,7 +9,7 @@ const VG_BUNDLE = "https://vg-bunny-cdn.b-cdn.net/vg_live_build/vg_bundle.js";
 
 export function ConvocoreWidget() {
   const pathname = usePathname();
-  const enabled = pathname === "/inbox";
+  const enabled = /(^|\/)inbox(\/|$)/.test(pathname || "");
 
   useEffect(() => {
     if (!enabled) return;
@@ -70,4 +70,3 @@ export function ConvocoreWidget() {
     </>
   );
 }
-

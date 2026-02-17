@@ -193,11 +193,12 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams?: { page?: string };
+  searchParams?: Promise<{ page?: string }>;
 }) {
   const { supabase, user, userRole } = await getViewer();
   const pageSize = 100;
-  const page = Math.max(1, Number(searchParams?.page || "1") || 1);
+  const resolvedSearchParams = await searchParams;
+  const page = Math.max(1, Number(resolvedSearchParams?.page || "1") || 1);
 
   const [{ leads, hasNextPage }, reps] = await Promise.all([
     getLeadsPage({ page, pageSize }),
