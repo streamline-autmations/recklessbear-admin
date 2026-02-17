@@ -31,6 +31,8 @@ import { ExternalLink, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw, Copy
 import { assignToMeAction } from "../actions";
 import { getTrelloCardUrl, TRELLO_LISTS } from "@/lib/trello";
 import { renderTrelloCardDescription } from "@/lib/trello-card-template";
+import { TrelloProductListEditor } from "./trello-product-list-editor";
+import { formatTrelloProductList, parseTrelloProductList, type TrelloProductLine } from "./trello-product-list";
 
 const leadDetailTabs = [
   { value: "overview", label: "Overview" },
@@ -137,7 +139,7 @@ export function LeadDetailClient({
   const [trelloJobId, setTrelloJobId] = useState("");
   const [trelloCardTitle, setTrelloCardTitle] = useState("");
   const [trelloTargetListId, setTrelloTargetListId] = useState<string>(TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION);
-  const [trelloProductList, setTrelloProductList] = useState("");
+  const [trelloProducts, setTrelloProducts] = useState<TrelloProductLine[]>([]);
   const [isCreatingTrello, setIsCreatingTrello] = useState(false);
   const defaultTabOrder = useMemo<LeadDetailTabValue[]>(() => leadDetailTabs.map((t) => t.value), []);
   const [activeTab, setActiveTab] = useState<LeadDetailTabValue>("overview");
@@ -885,19 +887,17 @@ export function LeadDetailClient({
     return `Lead ${leadIdText}`;
   }
 
-  function buildProductListPrefill(): string {
+  function buildProductListPrefill(): TrelloProductLine[] {
     const selected = Array.isArray(lead.selected_apparel_items) ? lead.selected_apparel_items : null;
     if (selected && selected.length > 0) {
-      return selected
-        .map((itemRaw) => {
-          const item = String(itemRaw || "").trim();
-          if (!item) return "";
-          return `${item} (STD)\n[Qty], [Size]`;
-        })
-        .filter(Boolean)
-        .join("\n\n");
+      const unique = Array.from(new Set(selected.map((v) => String(v || "").trim()).filter(Boolean)));
+      return unique.map((product) => ({
+        id: createUuidV4(),
+        product,
+        variants: [{ id: createUuidV4(), size: "STD", qty: 1 }],
+      }));
     }
-    return (lead.trello_product_list || "").trim();
+    return parseTrelloProductList((lead.trello_product_list || "").trim());
   }
 
   function openTrelloPreview() {
@@ -908,14 +908,18 @@ export function LeadDetailClient({
     setTrelloJobId(createUuidV4());
     setTrelloCardTitle(buildCardTitle());
     setTrelloTargetListId(TRELLO_LISTS.ORDERS_AWAITING_CONFIRMATION);
-    setTrelloProductList(buildProductListPrefill());
+    setTrelloProducts(buildProductListPrefill());
     setTrelloPreviewOpen(true);
   }
+
+  const trelloProductList = useMemo(() => {
+    return formatTrelloProductList(trelloProducts);
+  }, [trelloProducts]);
 
   const trelloDescriptionPreview = useMemo(() => {
     const leadIdText = lead.lead_id;
     const customerName = (lead.customer_name || lead.name || "").trim() || `Lead ${leadIdText}`;
-    const productList = trelloProductList.trim() || "Product Name (STD)\n[Qty], [Size]";
+    const productList = trelloProductList.trim() || "No products yet.";
     return renderTrelloCardDescription({
       INVOICE_NUMBER: "[Enter Invoice # Here]",
       PAYMENT_STATUS: lead.payment_status || "Pending",
@@ -1073,14 +1077,9 @@ export function LeadDetailClient({
                     Copy Product List
                   </Button>
                 </div>
-                <Textarea
-                  value={trelloProductList}
-                  onChange={(e) => setTrelloProductList(e.target.value)}
-                  className="min-h-[140px]"
-                  placeholder="Paste or type the product list here. Use the same formatting as the template. This is required before creating the card."
-                />
+                <TrelloProductListEditor value={trelloProducts} onChange={setTrelloProducts} disabled={isCreatingTrello} />
                 {!trelloProductList.trim() && (
-                  <p className="text-sm text-muted-foreground">Product list is required before you can create the Trello card.</p>
+                  <p className="text-sm text-muted-foreground">Add at least one product before you can create the Trello card.</p>
                 )}
               </div>
 

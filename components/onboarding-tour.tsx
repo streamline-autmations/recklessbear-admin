@@ -27,40 +27,16 @@ export function OnboardingTour() {
   const steps = useMemo<TourStep[]>(() => {
     return [
       {
-        key: "sidebar-leads",
-        title: "Leads",
-        body: "New enquiries show here.",
-        selector: '[data-tour=\"sidebar-leads\"]',
+        key: "a2hs-ios",
+        title: "Add this app to your Home Screen (iPhone/iPad)",
+        body: "Open this app in Safari.\nTap Share (square with arrow).\nTap Add to Home Screen.\nTap Add.",
+        selector: '[data-tour="a2hs-none"]',
       },
       {
-        key: "leads-focus-tabs",
-        title: "Focus Tabs",
-        body: "Start with Needs Action.",
-        selector: '[data-tour=\"leads-focus-tabs\"]',
-        routeHint: "/leads",
-        goTo: "/leads",
-      },
-      {
-        key: "open-lead",
-        title: "Open a Lead",
-        body: "Tap Open on any lead to see what to do next.",
-        selector: '[data-tour=\"lead-open\"]',
-        routeHint: "/leads",
-        goTo: "/leads",
-      },
-      {
-        key: "next-action",
-        title: "Next Action",
-        body: "Follow these buttons to move the lead forward.",
-        selector: '[data-tour=\"lead-next-action\"]',
-        routeHint: "/leads/",
-      },
-      {
-        key: "jobs",
-        title: "Jobs / Production",
-        body: "Production tracking happens here.",
-        selector: '[data-tour=\"sidebar-jobs\"]',
-        goTo: "/jobs",
+        key: "a2hs-android",
+        title: "Add this app to your Home Screen (Android)",
+        body: "Open this app in Chrome.\nTap the menu (⋮).\nTap Add to Home screen.\nConfirm Add.",
+        selector: '[data-tour="a2hs-none"]',
       },
     ];
   }, []);
@@ -68,20 +44,13 @@ export function OnboardingTour() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const completed = window.localStorage.getItem("rb_admin_tour_completed");
+      const completed = window.localStorage.getItem("rb_admin_a2hs_completed");
       if (completed === "true") return;
       setOpen(true);
     } catch {
       setOpen(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    if (stepIndex === 2 && pathname?.startsWith("/leads/") && pathname !== "/leads") {
-      setStepIndex(3);
-    }
-  }, [open, stepIndex, pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +93,7 @@ export function OnboardingTour() {
 
   function complete() {
     try {
-      window.localStorage.setItem("rb_admin_tour_completed", "true");
+      window.localStorage.setItem("rb_admin_a2hs_completed", "true");
     } catch {
     }
     setOpen(false);
@@ -183,7 +152,7 @@ export function OnboardingTour() {
       >
         <div className="rounded-xl border bg-background p-4 shadow-lg">
           <div className="text-sm font-semibold">{step.title}</div>
-          <div className="mt-1 text-sm text-muted-foreground">{step.body}</div>
+          <div className="mt-1 text-sm text-muted-foreground whitespace-pre-line">{step.body}</div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <Button type="button" variant="ghost" className="min-h-[44px]" onClick={complete}>
@@ -219,16 +188,6 @@ export function OnboardingTour() {
                       complete();
                       return;
                     }
-                    if (step.key === "open-lead" && pathname === "/leads") {
-                      const el = document.querySelector(step.selector) as HTMLElement | null;
-                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      return;
-                    }
-                    if (step.key === "next-action" && !pathname?.startsWith("/leads/")) {
-                      const el = document.querySelector('[data-tour="lead-open"]') as HTMLElement | null;
-                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      return;
-                    }
                     setStepIndex((v) => Math.min(steps.length - 1, v + 1));
                   }}
                 >
@@ -236,10 +195,6 @@ export function OnboardingTour() {
                 </Button>
               )}
             </div>
-          </div>
-
-          <div className="mt-2 text-xs text-muted-foreground">
-            Step {stepIndex + 1} of {steps.length}
           </div>
         </div>
       </div>

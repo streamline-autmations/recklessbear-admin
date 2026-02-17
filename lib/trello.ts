@@ -3,6 +3,8 @@
  * All Trello API calls should be server-side only
  */
 
+import { renderTrelloCardDescription } from "@/lib/trello-card-template";
+
 const TRELLO_API_BASE = "https://api.trello.com/1";
 
 // Trello List IDs mapping
@@ -77,49 +79,24 @@ export interface JobCardData {
  * Generate the structured card description with machine-readable data
  */
 export function generateCardDescription(data: JobCardData): string {
-  const humanReadable = `INVOICE NUMBER:
-${data.invoiceNumber || "[Enter Invoice # Here]"}
-
-📝 PLEASE COMPLETE THIS ORDER
-Instructions:
-Fill in the Invoice Number and Order ID.
-Update the Product Name and (Variant) on the first line of each block. Use (STD) for standard items.
-For each product, list the quantities and sizes needed (e.g., 4, M).
-
-👕 ORDER DETAILS
-Payment Status: ${data.paymentStatus || "Pending"}
-Order ID: ${data.jobId}
-Order Quantity: ${data.orderQuantity || "[Enter Total Quantity]"}
-Order Deadline: ${data.orderDeadline || "[Enter Deadline]"}
-
----PRODUCT LIST---
-${data.productList || "Product Name (STD)\n[Qty], [Size]"}
----END LIST---
-
-📞 CONTACT
-Name: ${data.customerName}
-Phone: ${data.phone || "[Enter Phone]"}
-Email: ${data.email || "[Enter Email]"}
-Organization: ${data.organization || "[Enter Organization]"}
-Location: ${data.location || "[Enter Location]"}
-
-🎨 DESIGN NOTES
-${data.designNotes || "[Add any final design notes here]"}`;
-
-  // Machine-readable section (hidden in HTML comment)
-  const machineData = `
-
-<!-- MACHINE DATA - DO NOT EDIT -->
-<!--
-LEAD_ID: ${data.leadId}
-JOB_ID: ${data.jobId}
-INVOICE: ${data.invoiceNumber || ""}
-PAYMENT_STATUS: ${data.paymentStatus}
-ORDER_QUANTITY: ${data.orderQuantity || ""}
-ORDER_DEADLINE: ${data.orderDeadline || ""}
--->`;
-
-  return humanReadable + machineData;
+  return renderTrelloCardDescription({
+    INVOICE_NUMBER: data.invoiceNumber || "",
+    PAYMENT_STATUS: data.paymentStatus || "Pending",
+    JOB_ID: data.jobId,
+    ORDER_QUANTITY: String(data.orderQuantity ?? ""),
+    ORDER_DEADLINE: data.orderDeadline || "",
+    PRODUCT_LIST: data.productList || "",
+    CUSTOMER_NAME: data.customerName,
+    PHONE: data.phone || "",
+    EMAIL: data.email || "",
+    ORGANIZATION: data.organization || "",
+    LOCATION: data.location || "",
+    DESIGN_NOTES: data.designNotes || "",
+    LEAD_ID: data.leadId,
+    INVOICE_MACHINE: data.invoiceNumber || "",
+    ORDER_QUANTITY_MACHINE: String(data.orderQuantity ?? ""),
+    ORDER_DEADLINE_MACHINE: data.orderDeadline || "",
+  });
 }
 
 /**

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Settings, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
@@ -33,7 +33,6 @@ const navigation = [
   { name: "RecklessBear WhatsApp", href: "/inbox", icon: MessageSquare },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Users", href: "/users", icon: ShieldCheck },
-  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 interface AppShellProps {
@@ -105,7 +104,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const renderNav = (mobile?: boolean) => {
     const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
     const visibleNav = navigation.filter((item) => {
-      if (item.href === "/users" || item.href === "/settings" || item.href === "/analytics") {
+      if (item.href === "/users" || item.href === "/analytics") {
         return isCeoOrAdmin;
       }
       return true;

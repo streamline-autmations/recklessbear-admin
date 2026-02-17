@@ -20,8 +20,7 @@ async function getCurrentUserRole(): Promise<string | null> {
 export default async function CreateUserPage() {
   const userRole = await getCurrentUserRole();
   
-  // Only CEO can create users
-  if (userRole !== "ceo") {
+  if (userRole !== "ceo" && userRole !== "admin") {
     redirect("/users");
   }
 

@@ -1,21 +1,14 @@
 export const TRELLO_CARD_DESCRIPTION_TEMPLATE = `INVOICE NUMBER:
 [INVOICE_NUMBER]
 
-📝 PLEASE COMPLETE THIS ORDER
-Instructions:
-Fill in the Invoice Number and Order ID.
-Update the Product Name and (Variant) on the first line of each block. Use (STD) for standard items.
-For each product, list the quantities and sizes needed (e.g., 4, M).
-
 👕 ORDER DETAILS
 Payment Status: [PAYMENT_STATUS]
 Order ID: [JOB_ID]
 Order Quantity: [ORDER_QUANTITY]
 Order Deadline: [ORDER_DEADLINE]
 
----PRODUCT LIST---
+👕 PRODUCTS
 [PRODUCT_LIST]
----END LIST---
 
 📞 CONTACT
 Name: [CUSTOMER_NAME]
@@ -42,4 +35,3 @@ export function renderTrelloCardDescription(vars: Record<string, string>): strin
     return acc.split(`[${key}]`).join(value);
   }, TRELLO_CARD_DESCRIPTION_TEMPLATE);
 }
-

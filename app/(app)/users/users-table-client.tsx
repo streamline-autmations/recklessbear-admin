@@ -1,7 +1,5 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -27,27 +25,8 @@ interface UsersTableClientProps {
 }
 
 export function UsersTableClient({ initialUsers, currentUserRole }: UsersTableClientProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return initialUsers;
-    const query = searchQuery.toLowerCase();
-    return initialUsers.filter((user) => {
-      const name = user.full_name?.toLowerCase() || "";
-      const email = user.email?.toLowerCase() || "";
-      return name.includes(query) || email.includes(query);
-    });
-  }, [initialUsers, searchQuery]);
-
   return (
     <div className="space-y-4">
-      <Input
-        type="search"
-        placeholder="Search by name or email..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="min-h-[44px]"
-      />
       <div className="sm:hidden text-xs text-muted-foreground">Swipe left/right to see more</div>
       <div className="overflow-x-auto -mx-4 md:mx-0">
         <div className="inline-block min-w-full align-middle">
@@ -62,14 +41,14 @@ export function UsersTableClient({ initialUsers, currentUserRole }: UsersTableCl
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.length === 0 ? (
+              {initialUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    {searchQuery ? "No users found." : "No users yet."}
+                    No users yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredUsers.map((user) => (
+                initialUsers.map((user) => (
                   <UsersTableEdit key={user.user_id} user={user} canDelete={currentUserRole === "ceo"} />
                 ))
               )}

@@ -59,7 +59,7 @@ export default async function UsersPage() {
         title="Users"
         subtitle="Manage user profiles and roles."
         actions={
-          userRole === "ceo" ? (
+          userRole === "ceo" || userRole === "admin" ? (
             <Button asChild className="min-h-[44px]">
               <Link href="/users/new">Create User</Link>
             </Button>

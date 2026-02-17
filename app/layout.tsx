@@ -6,6 +6,18 @@ import { ThemeProvider } from "@/components/theme-provider";
 export const metadata: Metadata = {
   title: "RecklessBear Admin",
   description: "RecklessBear Admin Dashboard",
+  icons: {
+    icon: [
+      {
+        url: "https://res.cloudinary.com/dnlgohkcc/image/upload/v1771311076/Logo-Black_oypd5f.png",
+      },
+    ],
+    apple: [
+      {
+        url: "https://res.cloudinary.com/dnlgohkcc/image/upload/v1771311076/Logo-Black_oypd5f.png",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({

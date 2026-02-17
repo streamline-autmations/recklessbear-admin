@@ -126,8 +126,8 @@ export async function createUserAction(
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || profile.role !== "ceo") {
-    return { error: "Unauthorized: Only CEO can create users" };
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can create users" };
   }
 
   // Use Supabase Admin API (service role key) to create user
