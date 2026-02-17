@@ -20,15 +20,26 @@ export function CreateUserForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
+    setInviteLink(null);
     startTransition(async () => {
       const result = await createUserAction(formData);
       if (result && "error" in result) {
         setError(result.error);
         toast.error(result.error);
       } else {
+        const link =
+          result && typeof result === "object" && "inviteLink" in result
+            ? (result as { inviteLink?: string }).inviteLink
+            : undefined;
+        if (link) {
+          setInviteLink(link);
+          toast.success("User created. Invite email failed — copy the link below.");
+          return;
+        }
         toast.success("User created successfully");
         router.push("/users");
         router.refresh();
@@ -93,6 +104,31 @@ export function CreateUserForm() {
 
           {error && (
             <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          {inviteLink && (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="text-sm font-medium">Invite link</div>
+              <div className="text-xs text-muted-foreground">Copy and send this link to the user to set their password.</div>
+              <div className="flex gap-2">
+                <Input value={inviteLink} readOnly className="min-h-[44px]" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-[44px]"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inviteLink);
+                      toast.success("Invite link copied");
+                    } catch {
+                      toast.error("Could not copy link");
+                    }
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
           )}
 
           <div className="flex gap-2">

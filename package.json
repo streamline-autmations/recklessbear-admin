@@ -11,7 +11,9 @@
     "upsert-leads": "tsx scripts/upsertLeadsFromCsv.ts",
     "upsert-leads:dry": "tsx scripts/upsertLeadsFromCsv.ts --dry-run",
     "normalize-intents": "tsx scripts/normalizeLeadIntents.ts",
-    "normalize-intents:dry": "tsx scripts/normalizeLeadIntents.ts --dry-run"
+    "normalize-intents:dry": "tsx scripts/normalizeLeadIntents.ts --dry-run",
+    "cleanup-leads-janfeb-2026:dry": "tsx scripts/cleanupLeadsJanFeb2026.ts --dry-run",
+    "cleanup-leads-janfeb-2026": "tsx scripts/cleanupLeadsJanFeb2026.ts --apply --confirm jan-feb-2026"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

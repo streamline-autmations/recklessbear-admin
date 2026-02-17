@@ -98,7 +98,7 @@ const deleteUserSchema = z.object({
 
 export async function createUserAction(
   formData: FormData
-): Promise<{ error?: string; userId?: string } | void> {
+): Promise<{ error?: string; userId?: string; inviteLink?: string } | void> {
   const rawFormData = {
     email: formData.get("email") as string,
     fullName: formData.get("fullName") as string,
@@ -133,7 +133,7 @@ export async function createUserAction(
   // Use Supabase Admin API (service role key) to create user
   // This must be done server-side only, never expose service role key to client
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_URL) {
     return { error: "Server configuration error: Missing Supabase credentials" };
@@ -153,38 +153,79 @@ export async function createUserAction(
     return { error: "Missing NEXT_PUBLIC_BASE_URL (or VERCEL_URL) for invite redirect" };
   }
 
-  // Create auth user (invite via email)
-  const { data: authUser, error: authError } = await adminClient.auth.admin.inviteUserByEmail(
+  const redirectTo = `${baseUrl}/auth/callback`;
+  const userMeta = {
+    full_name: result.data.fullName,
+    role: result.data.role,
+  };
+
+  let newUserId: string | null = null;
+  let inviteLink: string | null = null;
+
+  // Prefer the built-in email invite. If email sending fails, fall back to generating
+  // an invite link that the admin can copy/share manually.
+  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
     result.data.email,
-    {
-      redirectTo: `${baseUrl}/auth/callback`,
-      data: {
-        full_name: result.data.fullName,
-        role: result.data.role,
-      },
-    }
+    { redirectTo, data: userMeta }
   );
 
-  if (authError || !authUser?.user) {
-    return { error: authError?.message || "Failed to create user" };
+  if (!inviteError && inviteData?.user?.id) {
+    newUserId = inviteData.user.id;
+  } else {
+    const msg = inviteError?.message || "Failed to create user";
+    console.error("[createUserAction] inviteUserByEmail failed", {
+      message: msg,
+      email: result.data.email,
+      redirectTo,
+    });
+
+    const lower = msg.toLowerCase();
+    const isEmailSendFailure =
+      lower.includes("error sending invite email") ||
+      lower.includes("error sending confirmation email") ||
+      lower.includes("smtp") ||
+      lower.includes("mail");
+
+    if (!isEmailSendFailure) {
+      return { error: msg };
+    }
+
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: "invite",
+      email: result.data.email,
+      options: { redirectTo, data: userMeta },
+    });
+
+    if (linkError || !linkData?.user?.id) {
+      const fallbackMsg = linkError?.message || msg;
+      console.error("[createUserAction] generateLink fallback failed", {
+        message: fallbackMsg,
+        email: result.data.email,
+        redirectTo,
+      });
+      return { error: fallbackMsg };
+    }
+
+    newUserId = linkData.user.id;
+    inviteLink = (linkData as unknown as { properties?: { action_link?: string } }).properties?.action_link || null;
   }
 
   // Upsert profile with role and name
   const { error: profileError } = await adminClient
     .from("profiles")
-    .upsert({
-      user_id: authUser.user.id,
-      full_name: result.data.fullName,
-      email: result.data.email,
-      phone: result.data.phone || null,
-      role: result.data.role,
-    }, {
-      onConflict: "user_id",
-    });
+    .upsert(
+      {
+        user_id: newUserId,
+        full_name: result.data.fullName,
+        email: result.data.email,
+        phone: result.data.phone || null,
+        role: result.data.role,
+      },
+      { onConflict: "user_id" }
+    );
 
   if (profileError) {
-    // If profile creation fails, try to clean up auth user
-    await adminClient.auth.admin.deleteUser(authUser.user.id);
+    await adminClient.auth.admin.deleteUser(newUserId);
     return { error: profileError.message || "Failed to create user profile" };
   }
 
@@ -195,7 +236,7 @@ export async function createUserAction(
   // No longer syncing to 'users' table as we migrated to 'profiles'
   
   revalidatePath("/users");
-  return { userId: authUser.user.id };
+  return { userId: newUserId, inviteLink: inviteLink || undefined };
 }
 
 export async function deleteUserAction(
