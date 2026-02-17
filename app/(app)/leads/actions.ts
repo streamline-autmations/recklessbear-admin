@@ -12,6 +12,107 @@ const deleteLeadSchema = z.object({
   leadId: z.string().uuid(),
 });
 
+export async function autoAssignAllLeadsAction(): Promise<{ error?: string; assigned?: number } | void> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, email")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Unauthorized" };
+  }
+
+  const role = profile.role;
+  if (role !== "admin" && role !== "ceo") {
+    return { error: "Unauthorized" };
+  }
+
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 2);
+  const cutoffIso = cutoff.toISOString();
+
+  const { data: reps, error: repsError } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("role", "rep");
+
+  if (repsError) {
+    return { error: repsError.message || "Failed to load reps" };
+  }
+
+  const repIds = (reps || []).map((r) => r.user_id).filter(Boolean) as string[];
+  if (repIds.length === 0) {
+    return { error: "No reps available" };
+  }
+
+  const { data: leads, error: leadsError } = await supabase
+    .from("leads")
+    .select("id, status")
+    .is("assigned_rep_id", null)
+    .gte("created_at", cutoffIso)
+    .order("created_at", { ascending: true })
+    .limit(10000);
+
+  if (leadsError) {
+    return { error: leadsError.message || "Failed to load leads" };
+  }
+
+  const leadRows = (leads || []).filter((l) => !!l.id) as Array<{ id: string; status: string | null }>;
+  if (leadRows.length === 0) {
+    return { assigned: 0 };
+  }
+
+  const assignments = new Map<string, string[]>();
+  for (let i = 0; i < leadRows.length; i++) {
+    const repId = repIds[i % repIds.length];
+    const list = assignments.get(repId) || [];
+    list.push(leadRows[i].id);
+    assignments.set(repId, list);
+  }
+
+  const nowIso = new Date().toISOString();
+  const chunkSize = 200;
+
+  for (const [repId, ids] of assignments.entries()) {
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+
+      const { error: updateError } = await supabase
+        .from("leads")
+        .update({ assigned_rep_id: repId, updated_at: nowIso })
+        .in("id", chunk);
+
+      if (updateError) {
+        return { error: updateError.message || "Failed to assign leads" };
+      }
+
+      const { error: statusError } = await supabase
+        .from("leads")
+        .update({ status: "Assigned", updated_at: nowIso })
+        .in("id", chunk)
+        .or("status.is.null,status.eq.New,status.eq.new");
+
+      if (statusError) {
+        return { error: statusError.message || "Failed to update lead status" };
+      }
+    }
+  }
+
+  revalidatePath("/leads");
+  return { assigned: leadRows.length };
+}
+
 export async function assignToMeAction(formData: FormData): Promise<{ error?: string } | void> {
   const rawFormData = {
     leadId: formData.get("leadId") as string,

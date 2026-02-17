@@ -281,3 +281,41 @@ export async function detectChatAction(conversationId: string): Promise<
   revalidatePath("/inbox");
   return { success: true, matched: true, lead_id: leadId, job_id: jobId, assigned_rep_id: assignedRepId };
 }
+
+export async function clearWhatsAppInboxAction(): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  const role = (profile as { role?: string } | null)?.role;
+  if (role !== "ceo" && role !== "admin") {
+    return { error: "Unauthorized" };
+  }
+
+  const { data: conversations, error: convError } = await supabase
+    .from("wa_conversations")
+    .select("id")
+    .limit(2000);
+
+  if (convError) return { error: convError.message || "Failed to load conversations" };
+
+  const ids = (conversations || []).map((c) => (c as { id: string }).id).filter(Boolean);
+  if (ids.length > 0) {
+    const { error: msgError } = await supabase.from("wa_messages").delete().in("conversation_id", ids);
+    if (msgError) return { error: msgError.message || "Failed to delete messages" };
+    const { error: delConvError } = await supabase.from("wa_conversations").delete().in("id", ids);
+    if (delConvError) return { error: delConvError.message || "Failed to delete conversations" };
+  }
+
+  revalidatePath("/inbox");
+  return { success: true };
+}

@@ -47,7 +47,7 @@ async function getCurrentUserRole(): Promise<string | null> {
 async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Rep[]> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, full_name, email")
+    .select("user_id, full_name")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -58,7 +58,7 @@ async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Re
   return (data || []).map((user) => ({
     id: user.user_id,
     name: user.full_name,
-    email: user.email || null,
+    email: null,
   }));
 }
 

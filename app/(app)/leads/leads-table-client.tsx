@@ -115,7 +115,7 @@ function buildIntents(lead: DisplayLead): string[] {
   );
 }
 
-type FocusTab = "needs_action" | "unassigned" | "in_progress" | "in_production";
+type FocusTab = "all" | "needs_action" | "unassigned" | "in_progress" | "in_production";
 
 type NextActionLabel =
   | "Needs Contact"
@@ -143,6 +143,7 @@ function getNextActionLabel(lead: DisplayLead): NextActionLabel {
 }
 
 function matchesFocusTab(lead: DisplayLead, tab: FocusTab): boolean {
+  if (tab === "all") return true;
   if (tab === "unassigned") return !lead.assigned_rep_id;
 
   const nextAction = getNextActionLabel(lead);
@@ -230,8 +231,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
           schema: 'public',
           table: 'leads',
         },
-        (payload) => {
-          console.log('[realtime] Lead changed:', payload.eventType, payload.new || payload.old);
+        () => {
           if (realtimeRefreshTimerRef.current) {
             window.clearTimeout(realtimeRefreshTimerRef.current);
           }
@@ -240,9 +240,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
           }, 500);
         }
       )
-      .subscribe((status) => {
-        console.log('[realtime] Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       if (realtimeRefreshTimerRef.current) {
@@ -409,6 +407,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
 
   const FocusTabs = () => {
     const tabs: Array<{ value: FocusTab; label: string }> = [
+      { value: "all", label: "All" },
       { value: "needs_action", label: "Needs Action" },
       { value: "unassigned", label: "Unassigned" },
       { value: "in_progress", label: "In Progress" },
@@ -783,7 +782,23 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         {focusFilteredLeads.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              {hasActiveFilters ? "No leads found matching your filters." : "No leads yet."}
+              {initialLeads.length === 0
+                ? "No leads yet."
+                : "No leads found for the current view."}
+              {initialLeads.length > 0 && (
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {focusTab !== "all" && (
+                    <Button type="button" variant="outline" className="min-h-[36px]" onClick={() => setFocusTab("all")}>
+                      Show all leads
+                    </Button>
+                  )}
+                  {hasActiveFilters && (
+                    <Button type="button" variant="outline" className="min-h-[36px]" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : (

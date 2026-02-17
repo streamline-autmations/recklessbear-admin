@@ -14,6 +14,28 @@ export function ConvocoreWidget() {
   useEffect(() => {
     if (!enabled) return;
 
+    try {
+      const clearedKey = "rb-admin.vg.cleared";
+      if (window.localStorage.getItem(clearedKey) !== "1") {
+        const keys = Object.keys(window.localStorage);
+        for (const k of keys) {
+          const lk = k.toLowerCase();
+          if (lk.includes("vg") || lk.includes("convocore")) {
+            window.localStorage.removeItem(k);
+          }
+        }
+        const sessionKeys = Object.keys(window.sessionStorage);
+        for (const k of sessionKeys) {
+          const lk = k.toLowerCase();
+          if (lk.includes("vg") || lk.includes("convocore")) {
+            window.sessionStorage.removeItem(k);
+          }
+        }
+        window.localStorage.setItem(clearedKey, "1");
+      }
+    } catch {
+    }
+
     (window as unknown as { VG_CONFIG?: unknown }).VG_CONFIG = {
       ID: "NPxTEjBmmvt9M9OAh0s0",
       region: "na",
@@ -60,8 +82,11 @@ export function ConvocoreWidget() {
         id="VG_OVERLAY_CONTAINER"
         style={{
           position: "fixed",
-          inset: 0,
-          zIndex: 2147483000,
+          right: 0,
+          bottom: 0,
+          width: "1px",
+          height: "1px",
+          zIndex: 60,
           pointerEvents: "none",
           background: "transparent",
         }}

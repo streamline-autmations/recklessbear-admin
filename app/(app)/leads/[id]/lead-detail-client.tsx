@@ -404,6 +404,14 @@ export function LeadDetailClient({
   })();
 
   const isDev = process.env.NODE_ENV !== "production";
+  const questionTopic = (() => {
+    const raw = lead.question_data as Record<string, unknown> | null | undefined;
+    if (!raw) return null;
+    const v = raw.topic ?? raw.subject ?? raw.category;
+    if (typeof v !== "string") return null;
+    const trimmed = v.trim();
+    return trimmed ? trimmed : null;
+  })();
 
   const isDbLead = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
   const canEditQuote = isCeoOrAdmin && isDbLead;
@@ -638,7 +646,6 @@ export function LeadDetailClient({
   }
 
   function formatAttachmentsValue() {
-    if (attachmentUrls.length === 0) return "Not provided";
     return <AttachmentGallery attachments={attachmentUrls} />;
   }
 
@@ -1840,12 +1847,20 @@ export function LeadDetailClient({
 
         {/* Question Tab */}
         <TabsContent value="question" className="space-y-4">
-          {(lead.has_asked_question || lead.question) ? (
+          {(lead.has_asked_question || lead.question || questionTopic) ? (
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-semibold mb-4">Question Details</h3>
                 <div className="space-y-6">
-                  {/* Question Field */}
+                  {questionTopic && (
+                    <div>
+                      <p className="text-sm font-medium mb-2">Topic</p>
+                      <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg border">
+                        {questionTopic}
+                      </div>
+                    </div>
+                  )}
+
                   {lead.question && (
                     <div>
                       <p className="text-sm font-medium mb-2">Question</p>

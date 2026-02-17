@@ -25,8 +25,7 @@ export function AttachmentGallery({ attachments }: { attachments?: string[] | nu
   if (!attachments?.length) return <div className="text-sm text-muted-foreground">No attachments</div>;
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {attachments.map((url, idx) => {
           const isImg = isProbablyImage(url);
           const fname = fileNameFromUrl(url);
@@ -73,21 +72,6 @@ export function AttachmentGallery({ attachments }: { attachments?: string[] | nu
             </div>
           );
         })}
-      </div>
-
-      <div className="space-y-1">
-        {attachments.map((url, idx) => (
-          <a
-            key={`raw-${url}-${idx}`}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-muted-foreground underline break-all block"
-          >
-            {url}
-          </a>
-        ))}
-      </div>
     </div>
   );
 }

@@ -2,9 +2,6 @@
 
 import { useEffect } from "react";
 
-type WidgetPos = { x: number; y: number };
-
-const STORAGE_KEY_POS = "rb-admin.vg.pos";
 const STORAGE_KEY_HIDDEN = "rb-admin.vg.hidden";
 
 function readHidden(): boolean {
@@ -20,49 +17,6 @@ function writeHidden(hidden: boolean) {
     window.localStorage.setItem(STORAGE_KEY_HIDDEN, hidden ? "1" : "0");
   } catch {
   }
-}
-
-function readPos(): WidgetPos {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY_POS);
-    if (!raw) return { x: 0, y: 0 };
-    const parsed = JSON.parse(raw) as Partial<WidgetPos>;
-    return {
-      x: Number.isFinite(parsed.x) ? Number(parsed.x) : 0,
-      y: Number.isFinite(parsed.y) ? Number(parsed.y) : 0,
-    };
-  } catch {
-    return { x: 0, y: 0 };
-  }
-}
-
-function writePos(pos: WidgetPos) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(pos));
-  } catch {
-  }
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
-
-function getBaseTransform(el: HTMLElement) {
-  const existing = el.style.transform;
-  return existing && existing !== "none" ? existing : "";
-}
-
-function applyTranslate(el: HTMLElement, pos: WidgetPos) {
-  const base = el.getAttribute("data-rb-vg-base-transform") || "";
-  const translate = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
-  el.style.transform = base ? `${base} ${translate}` : translate;
-}
-
-function clampPos(pos: WidgetPos): WidgetPos {
-  return {
-    x: clamp(pos.x, -window.innerWidth + 80, window.innerWidth - 80),
-    y: clamp(pos.y, -window.innerHeight + 80, window.innerHeight - 80),
-  };
 }
 
 function pickBestFixedCandidate(candidates: HTMLElement[]): HTMLElement | null {
@@ -118,7 +72,7 @@ function ensureReopenButton(onClick: () => void) {
   const btn = document.createElement("button");
   btn.id = "rb-vg-reopen";
   btn.type = "button";
-  btn.textContent = "Chat";
+  btn.textContent = "▴";
   btn.style.position = "fixed";
   btn.style.right = "16px";
   btn.style.bottom = "16px";
@@ -127,9 +81,13 @@ function ensureReopenButton(onClick: () => void) {
   btn.style.color = "hsl(var(--primary-foreground))";
   btn.style.border = "1px solid hsl(var(--border))";
   btn.style.borderRadius = "9999px";
-  btn.style.padding = "10px 14px";
-  btn.style.fontSize = "14px";
-  btn.style.fontWeight = "600";
+  btn.style.width = "40px";
+  btn.style.height = "40px";
+  btn.style.display = "flex";
+  btn.style.alignItems = "center";
+  btn.style.justifyContent = "center";
+  btn.style.fontSize = "16px";
+  btn.style.fontWeight = "800";
   btn.style.cursor = "pointer";
   btn.style.boxShadow = "0 10px 25px rgba(0,0,0,0.25)";
 
@@ -150,12 +108,12 @@ function ensureControls(root: HTMLElement, abortSignal: AbortSignal) {
   const controls = document.createElement("div");
   controls.id = "rb-vg-controls";
   controls.style.position = "absolute";
-  controls.style.top = "-34px";
-  controls.style.right = "0";
+  controls.style.top = "8px";
+  controls.style.right = "8px";
   controls.style.display = "flex";
   controls.style.gap = "8px";
   controls.style.alignItems = "center";
-  controls.style.padding = "6px 8px";
+  controls.style.padding = "4px 6px";
   controls.style.borderRadius = "9999px";
   controls.style.background = "rgba(0,0,0,0.55)";
   controls.style.backdropFilter = "blur(6px)";
@@ -163,17 +121,6 @@ function ensureControls(root: HTMLElement, abortSignal: AbortSignal) {
   controls.style.zIndex = "2147483647";
   controls.style.pointerEvents = "auto";
   controls.style.userSelect = "none";
-
-  const dragBtn = document.createElement("button");
-  dragBtn.type = "button";
-  dragBtn.textContent = "Drag";
-  dragBtn.style.cursor = "grab";
-  dragBtn.style.border = "0";
-  dragBtn.style.background = "transparent";
-  dragBtn.style.color = "inherit";
-  dragBtn.style.fontSize = "12px";
-  dragBtn.style.fontWeight = "600";
-  dragBtn.style.padding = "4px 6px";
 
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
@@ -187,53 +134,8 @@ function ensureControls(root: HTMLElement, abortSignal: AbortSignal) {
   closeBtn.style.fontWeight = "800";
   closeBtn.style.padding = "2px 6px";
 
-  controls.appendChild(dragBtn);
   controls.appendChild(closeBtn);
   root.appendChild(controls);
-
-  let dragging = false;
-  let startX = 0;
-  let startY = 0;
-  let startPos: WidgetPos = { x: 0, y: 0 };
-
-  dragBtn.addEventListener(
-    "pointerdown",
-    (e) => {
-      dragging = true;
-      dragBtn.style.cursor = "grabbing";
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      startX = e.clientX;
-      startY = e.clientY;
-      startPos = readPos();
-    },
-    { signal: abortSignal }
-  );
-
-  dragBtn.addEventListener(
-    "pointermove",
-    (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      const next: WidgetPos = {
-        x: clamp(startPos.x + dx, -window.innerWidth + 80, window.innerWidth - 80),
-        y: clamp(startPos.y + dy, -window.innerHeight + 80, window.innerHeight - 80),
-      };
-
-      applyTranslate(root, next);
-      writePos(next);
-    },
-    { signal: abortSignal }
-  );
-
-  const endDrag = () => {
-    dragging = false;
-    dragBtn.style.cursor = "grab";
-  };
-
-  dragBtn.addEventListener("pointerup", endDrag, { signal: abortSignal });
-  dragBtn.addEventListener("pointercancel", endDrag, { signal: abortSignal });
 
   closeBtn.addEventListener(
     "click",
@@ -266,28 +168,16 @@ export function ConvocoreWidgetControls() {
       if (!root) return;
 
       root.style.pointerEvents = "auto";
-
-      if (!root.getAttribute("data-rb-vg-base-transform")) {
-        root.setAttribute("data-rb-vg-base-transform", getBaseTransform(root));
-      }
+      root.style.position = "fixed";
+      root.style.right = "16px";
+      root.style.bottom = "16px";
+      root.style.left = "auto";
+      root.style.top = "auto";
+      root.style.maxWidth = "calc(100vw - 32px)";
+      root.style.maxHeight = "calc(100vh - 96px)";
+      root.style.zIndex = "2147483646";
 
       const hidden = readHidden();
-      const pos = clampPos(readPos());
-
-      writePos(pos);
-      applyTranslate(root, pos);
-
-      const rect = root.getBoundingClientRect();
-      const mostlyOffscreen =
-        rect.right < 40 ||
-        rect.bottom < 40 ||
-        rect.left > window.innerWidth - 40 ||
-        rect.top > window.innerHeight - 40;
-      if (mostlyOffscreen) {
-        const reset: WidgetPos = { x: 0, y: 0 };
-        writePos(reset);
-        applyTranslate(root, reset);
-      }
 
       if (hidden) {
         root.style.display = "none";
@@ -312,9 +202,8 @@ export function ConvocoreWidgetControls() {
 
     const onResize = () => {
       if (!attachedRoot) return;
-      const pos = clampPos(readPos());
-      writePos(pos);
-      applyTranslate(attachedRoot, pos);
+      attachedRoot.style.maxWidth = "calc(100vw - 32px)";
+      attachedRoot.style.maxHeight = "calc(100vh - 96px)";
     };
     window.addEventListener("resize", onResize, { signal: abortController.signal });
 

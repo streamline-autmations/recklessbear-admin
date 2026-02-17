@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { WhatsAppConversation, WhatsAppMessage } from "@/types/inbox";
-import { detectChatAction, getMessages, markConversationRead, sendMessageAction } from "./actions";
+import { clearWhatsAppInboxAction, detectChatAction, getMessages, markConversationRead, sendMessageAction } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Send, ArrowLeft, Phone, User, MessageSquare } from "lucide-react";
+import { Search, Send, ArrowLeft, Phone, User, MessageSquare, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -181,6 +181,20 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
     }
   };
 
+  const handleClearInbox = async () => {
+    const ok = window.confirm("This will delete all WhatsApp conversations and messages. Continue?");
+    if (!ok) return;
+    const result = await clearWhatsAppInboxAction();
+    if (result && "error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    setSelectedId(null);
+    setMessages([]);
+    toast.success("Inbox cleared");
+    router.refresh();
+  };
+
   return (
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-[#d1d7db] bg-white shadow-sm text-[#111b21]">
       <div
@@ -192,6 +206,15 @@ export default function InboxClient({ initialConversations }: InboxClientProps) 
           <div className="flex items-center justify-between">
             <div className="font-semibold">RecklessBear WhatsApp</div>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-[#54656f] hover:text-[#111b21]"
+                onClick={handleClearInbox}
+                aria-label="Clear inbox"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-[#54656f] hover:text-[#111b21]">
                 <Phone className="h-4 w-4" />
               </Button>
