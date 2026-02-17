@@ -269,8 +269,8 @@ export async function deleteUserAction(
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || profile.role !== "ceo") {
-    return { error: "Unauthorized: Only CEO can delete users" };
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can delete users" };
   }
 
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

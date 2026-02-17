@@ -49,7 +49,11 @@ export function UsersTableClient({ initialUsers, currentUserRole }: UsersTableCl
                 </TableRow>
               ) : (
                 initialUsers.map((user) => (
-                  <UsersTableEdit key={user.user_id} user={user} canDelete={currentUserRole === "ceo"} />
+                  <UsersTableEdit
+                    key={user.user_id}
+                    user={user}
+                    canDelete={currentUserRole === "ceo" || currentUserRole === "admin"}
+                  />
                 ))
               )}
             </TableBody>
