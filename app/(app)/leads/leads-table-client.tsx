@@ -498,32 +498,32 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
 
     return (
       <Card className="transition-colors hover:bg-muted/30">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+        <CardContent className="p-3 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold leading-tight truncate">
+                <h3 className="text-sm sm:text-base font-semibold leading-tight truncate">
                   {lead.name || lead.customer_name || "—"}
                 </h3>
                 {primaryIntent && (
-                  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-background">
+                  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] sm:text-xs font-medium bg-background">
                     {primaryIntent}
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-muted-foreground truncate">{companyLabel}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <p className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">{companyLabel}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
                   {nextAction}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[11px] sm:text-xs text-muted-foreground">
                   Submitted {formatDate(lead.submission_date || lead.created_at || "")}
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <Button asChild className="min-h-[44px]" data-tour="lead-open">
+            <div className="flex w-full flex-row flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-col sm:items-end">
+              <Button asChild size="sm" className="h-9" data-tour="lead-open">
                 <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
               </Button>
 
@@ -532,7 +532,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                   {canAssignToMe && (
                     <Button
                       variant="outline"
-                      className="min-h-[44px]"
+                      size="sm"
+                      className="h-9"
                       disabled={isAssignPending}
                       onClick={() => handleAssignToMe(lead.id as string)}
                     >
@@ -542,7 +543,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                   {canAssignAsAdmin && (
                     <Button
                       variant="outline"
-                      className="min-h-[44px]"
+                      size="sm"
+                      className="h-9"
                       onClick={() => openAssignForLead(leadKey)}
                       disabled={isAssignPending}
                     >
@@ -555,7 +557,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
               {canDelete && (
                 <Button
                   variant="destructive"
-                  className="min-h-[44px] gap-2"
+                  size="sm"
+                  className="h-9 gap-2"
                   disabled={isDeletePending}
                   onClick={() => handleDeleteLead(lead.id as string)}
                 >
@@ -567,7 +570,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
           </div>
 
           {canAssignAsAdmin && assignOpenLeadKey === leadKey && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
               <div className="space-y-2">
                 <Label>Assign to</Label>
                 <Select value={assignSelectedRepId} onValueChange={setAssignSelectedRepId}>
@@ -584,7 +587,8 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                 </Select>
               </div>
               <Button
-                className="min-h-[44px]"
+                size="sm"
+                className="h-9"
                 disabled={!assignSelectedRepId || isAssignPending}
                 onClick={() => handleAssignRep(lead.id as string, assignSelectedRepId)}
               >
@@ -785,71 +789,76 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         ) : (
           <>
             {viewMode === "cards" ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-2 sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {focusFilteredLeads.map((lead) => (
                   <LeadCardRow key={lead.id || lead.lead_id} lead={lead} />
                 ))}
               </div>
             ) : (
               <Card>
+                <div className="sm:hidden px-4 pt-4 text-xs text-muted-foreground">Swipe left/right to see more</div>
                 <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Lead</TableHead>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Next</TableHead>
-                        <TableHead>Rep</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {focusFilteredLeads.map((lead) => {
-                        const nextAction = getNextActionLabel(lead);
-                        const repName = lead.assigned_rep_name || getRepName(lead, reps) || "—";
-                        const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
-                        return (
-                          <TableRow key={lead.id || lead.lead_id}>
-                            <TableCell className="font-medium">
-                              <div className="max-w-[260px] truncate">{lead.name || lead.customer_name || "—"}</div>
-                              <div className="text-xs text-muted-foreground max-w-[260px] truncate">{lead.email || lead.phone || ""}</div>
-                            </TableCell>
-                            <TableCell className="max-w-[240px] truncate">{companyLabel}</TableCell>
-                            <TableCell>
-                              <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
-                                {nextAction}
-                              </span>
-                            </TableCell>
-                            <TableCell className="max-w-[180px] truncate">{repName}</TableCell>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">
-                              {formatDate(lead.submission_date || lead.created_at || "")}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button asChild className="min-h-[36px]" size="sm">
-                                  <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
-                                </Button>
-                                {!!isCeoOrAdmin && isUuid(lead.id) && (
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    className="min-h-[36px] gap-2"
-                                    disabled={isDeletePending}
-                                    onClick={() => handleDeleteLead(lead.id as string)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    {isDeletePending ? "Deleting..." : "Delete"}
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <Table className="min-w-[760px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Lead</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Next</TableHead>
+                            <TableHead>Rep</TableHead>
+                            <TableHead>Submitted</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {focusFilteredLeads.map((lead) => {
+                            const nextAction = getNextActionLabel(lead);
+                            const repName = lead.assigned_rep_name || getRepName(lead, reps) || "—";
+                            const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
+                            return (
+                              <TableRow key={lead.id || lead.lead_id}>
+                                <TableCell className="font-medium">
+                                  <div className="max-w-[260px] truncate">{lead.name || lead.customer_name || "—"}</div>
+                                  <div className="text-xs text-muted-foreground max-w-[260px] truncate">{lead.email || lead.phone || ""}</div>
+                                </TableCell>
+                                <TableCell className="max-w-[240px] truncate">{companyLabel}</TableCell>
+                                <TableCell>
+                                  <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
+                                    {nextAction}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="max-w-[180px] truncate">{repName}</TableCell>
+                                <TableCell className="whitespace-nowrap text-muted-foreground">
+                                  {formatDate(lead.submission_date || lead.created_at || "")}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button asChild className="min-h-[36px]" size="sm">
+                                      <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
+                                    </Button>
+                                    {!!isCeoOrAdmin && isUuid(lead.id) && (
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        className="min-h-[36px] gap-2"
+                                        disabled={isDeletePending}
+                                        onClick={() => handleDeleteLead(lead.id as string)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                        {isDeletePending ? "Deleting..." : "Delete"}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}

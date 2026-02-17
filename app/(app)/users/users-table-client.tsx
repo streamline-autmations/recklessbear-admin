@@ -48,6 +48,7 @@ export function UsersTableClient({ initialUsers, currentUserRole }: UsersTableCl
         onChange={(e) => setSearchQuery(e.target.value)}
         className="min-h-[44px]"
       />
+      <div className="sm:hidden text-xs text-muted-foreground">Swipe left/right to see more</div>
       <div className="overflow-x-auto -mx-4 md:mx-0">
         <div className="inline-block min-w-full align-middle">
           <Table>

@@ -283,13 +283,5 @@ export async function deleteUserAction(
     return { error: profileDeleteError.message || "Failed to delete user profile" };
   }
 
-  const { error: legacyUsersDeleteError } = await adminClient
-    .from("users")
-    .delete()
-    .eq("id", result.data.userId);
-  if (legacyUsersDeleteError && !legacyUsersDeleteError.message.toLowerCase().includes("does not exist")) {
-    return { error: legacyUsersDeleteError.message || "Failed to delete legacy user record" };
-  }
-
   revalidatePath("/users");
 }

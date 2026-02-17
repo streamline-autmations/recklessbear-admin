@@ -118,6 +118,7 @@ export function JobsBoardClient({ initialLeads }: { initialLeads: Lead[] }) {
         <div className="text-sm text-muted-foreground">{isPending ? "Updating…" : `${leads.length} jobs`}</div>
       </div>
 
+      <div className="sm:hidden text-xs text-muted-foreground">Swipe left/right to see all columns</div>
       <div className="flex gap-4 overflow-x-auto pb-4">
         {allStages.map((stage) => {
           const key = stageKey(stage);
@@ -260,4 +261,3 @@ export function JobsBoardClient({ initialLeads }: { initialLeads: Lead[] }) {
     </div>
   );
 }
-

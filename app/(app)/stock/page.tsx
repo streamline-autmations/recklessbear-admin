@@ -346,12 +346,15 @@ export default async function StockPage() {
 
       <Tabs defaultValue="inventory" className="w-full">
         <div className="flex items-center justify-between gap-3">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-            {isAdmin && <TabsTrigger value="orders">Orders</TabsTrigger>}
-            <TabsTrigger value="movements">Movements</TabsTrigger>
-            {isAdmin && <TabsTrigger value="bom">Recipes / BOM</TabsTrigger>}
-          </TabsList>
+          <div className="w-full">
+            <div className="sm:hidden mb-2 text-xs text-muted-foreground">Swipe left/right to switch tabs</div>
+            <TabsList className="w-full justify-start overflow-x-auto">
+              <TabsTrigger value="inventory">Inventory</TabsTrigger>
+              {isAdmin && <TabsTrigger value="orders">Orders</TabsTrigger>}
+              <TabsTrigger value="movements">Movements</TabsTrigger>
+              {isAdmin && <TabsTrigger value="bom">Recipes / BOM</TabsTrigger>}
+            </TabsList>
+          </div>
           {isAdmin && (
             <div className="flex gap-2">
               <Button asChild variant="outline">

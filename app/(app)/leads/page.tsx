@@ -4,9 +4,6 @@ import { loadLeadsFromSpreadsheet } from '@/lib/leads/importLeadsFromSpreadsheet
 import type { Lead } from '@/types/leads';
 import { RefreshButton } from './refresh-button';
 import { PageHeader } from '@/components/page-header';
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getViewer } from "@/lib/viewer";
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 
@@ -190,17 +187,12 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
 }
 
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ page?: string }>;
-}) {
+export default async function LeadsPage() {
   const { supabase, user, userRole } = await getViewer();
-  const pageSize = 100;
-  const resolvedSearchParams = await searchParams;
-  const page = Math.max(1, Number(resolvedSearchParams?.page || "1") || 1);
+  const pageSize = 10000;
+  const page = 1;
 
-  const [{ leads, hasNextPage }, reps] = await Promise.all([
+  const [{ leads }, reps] = await Promise.all([
     getLeadsPage({ page, pageSize }),
     getUsersForAssignment(supabase),
   ]);
@@ -211,7 +203,7 @@ export default async function LeadsPage({
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        subtitle={`Manage and track your leads. (Page ${page})`}
+        subtitle="Manage and track your leads."
         actions={<RefreshButton />}
       />
       {leads.length === 0 ? (
@@ -241,21 +233,6 @@ export default async function LeadsPage({
               currentUserId={user?.id || undefined}
               isCeoOrAdmin={isCeoOrAdmin}
             />
-            <div className="mt-6 flex items-center justify-between gap-2">
-              <Button asChild variant="outline" disabled={page <= 1}>
-                <Link href={`/leads?page=${Math.max(1, page - 1)}`}>
-                  <ChevronLeft className="h-4 w-4" />
-                  Prev
-                </Link>
-              </Button>
-              <div className="text-sm text-muted-foreground">Page {page}</div>
-              <Button asChild variant="outline" disabled={!hasNextPage}>
-                <Link href={`/leads?page=${page + 1}`}>
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       )}
