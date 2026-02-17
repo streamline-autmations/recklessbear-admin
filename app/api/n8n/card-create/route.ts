@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   if (!jobId) return NextResponse.json({ error: "Job ID required" }, { status: 400 });
 
   const leadSelect =
-    "id, lead_id, customer_name, name, email, phone, organization, status, sales_status, payment_status, production_stage, delivery_date, design_notes, trello_product_list, selected_apparel_items, card_id, card_created";
+    "id, lead_id, customer_name, name, email, phone, organization, status, sales_status, payment_status, production_stage, delivery_date, design_notes, trello_product_list, selected_apparel_items, trello_card_id, card_created";
   const leadQuery = isUuid(leadId)
     ? supabase.from("leads").select(leadSelect).eq("id", leadId).single()
     : supabase.from("leads").select(leadSelect).eq("lead_id", leadId).single();
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
   await supabase.from("jobs").upsert(
     {
       id: jobId,
-      lead_id: lead.lead_id,
+      lead_id: lead.id,
       production_stage: lead.production_stage || "Orders Awaiting confirmation",
       payment_status: lead.payment_status || "Pending",
       trello_card_id: cardInfo.trelloCardId,
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     await supabase
       .from("leads")
       .update({
-        card_id: cardInfo.trelloCardId,
+        trello_card_id: cardInfo.trelloCardId,
         card_created: true,
         updated_at: new Date().toISOString(),
       })

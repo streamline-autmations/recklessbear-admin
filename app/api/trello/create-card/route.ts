@@ -56,7 +56,7 @@ type LeadRow = {
   payment_status: string | null;
   delivery_date: string | null;
   design_notes: string | null;
-  card_id: string | null;
+  trello_card_id: string | null;
   production_stage?: string | null;
 };
 
@@ -135,7 +135,7 @@ async function createOrReturnExisting(params: {
   productList: string;
 }) {
   const leadSelect =
-    "id, lead_id, customer_name, name, organization, email, phone, location, sales_status, status, payment_status, delivery_date, design_notes, card_id, production_stage";
+    "id, lead_id, customer_name, name, organization, email, phone, location, sales_status, status, payment_status, delivery_date, design_notes, trello_card_id, production_stage";
   const leadQuery = isUuid(params.leadId)
     ? params.supabase.from("leads").select(leadSelect).eq("id", params.leadId).single()
     : params.supabase.from("leads").select(leadSelect).eq("lead_id", params.leadId).single();
@@ -152,16 +152,16 @@ async function createOrReturnExisting(params: {
     return { ok: false as const, status: 400, error: "Set Quote Approved to start production" };
   }
 
-  if (leadRow.card_id) {
+  if (leadRow.trello_card_id) {
     const existingJob = await findExistingJobByLead(params.supabase, leadRow);
     return {
       ok: true as const,
       lead_id: leadRow.lead_id,
       job_id: existingJob?.id || null,
-      trello_card_id: leadRow.card_id,
+      trello_card_id: leadRow.trello_card_id,
       trello_list_id: existingJob?.trello_list_id || null,
       production_stage: leadRow.production_stage || existingJob?.production_stage || null,
-      trello_card_url: getTrelloCardUrl(leadRow.card_id),
+      trello_card_url: getTrelloCardUrl(leadRow.trello_card_id),
       trello_short_url: null,
     };
   }
@@ -172,7 +172,7 @@ async function createOrReturnExisting(params: {
     await params.supabase
       .from("leads")
       .update({
-        card_id: cardId,
+        trello_card_id: cardId,
         card_created: true,
         production_stage: existingJob.production_stage,
         sales_status: "Quote Approved",
@@ -216,7 +216,7 @@ async function createOrReturnExisting(params: {
   const productionStage = listName.trim();
 
   const jobUpdatePayload = {
-    lead_id: leadRow.lead_id,
+    lead_id: leadRow.id,
     trello_card_id: trelloResult.id,
     trello_card_url: trelloResult.url,
     trello_list_id: params.targetListId,
@@ -244,7 +244,7 @@ async function createOrReturnExisting(params: {
   await params.supabase
     .from("leads")
     .update({
-      card_id: trelloResult.id,
+      trello_card_id: trelloResult.id,
       card_created: true,
       production_stage: productionStage,
       sales_status: "Quote Approved",
@@ -290,15 +290,15 @@ export async function GET(request: NextRequest) {
 
   if (!leadId) return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
 
-  const baseSelect = "id, lead_id, card_id, production_stage";
+  const baseSelect = "id, lead_id, trello_card_id, production_stage";
   const leadQuery = isUuid(leadId)
     ? supabase.from("leads").select(baseSelect).eq("id", leadId).maybeSingle()
     : supabase.from("leads").select(baseSelect).eq("lead_id", leadId).maybeSingle();
   const { data: lead } = await leadQuery;
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-  const leadRow = lead as unknown as { id: string; lead_id: string; card_id: string | null; production_stage: string | null };
-  const existingCardId = leadRow.card_id;
+  const leadRow = lead as unknown as { id: string; lead_id: string; trello_card_id: string | null; production_stage: string | null };
+  const existingCardId = leadRow.trello_card_id;
   if (!existingCardId) {
     return NextResponse.json({ success: true, trello_card_id: null });
   }

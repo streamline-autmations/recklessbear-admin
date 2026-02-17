@@ -80,22 +80,16 @@ export interface JobCardData {
  */
 export function generateCardDescription(data: JobCardData): string {
   return renderTrelloCardDescription({
-    INVOICE_NUMBER: data.invoiceNumber || "",
     PAYMENT_STATUS: data.paymentStatus || "Pending",
     JOB_ID: data.jobId,
-    ORDER_QUANTITY: String(data.orderQuantity ?? ""),
     ORDER_DEADLINE: data.orderDeadline || "",
     PRODUCT_LIST: data.productList || "",
     CUSTOMER_NAME: data.customerName,
+    ORGANIZATION: data.organization || "",
     PHONE: data.phone || "",
     EMAIL: data.email || "",
-    ORGANIZATION: data.organization || "",
-    LOCATION: data.location || "",
     DESIGN_NOTES: data.designNotes || "",
     LEAD_ID: data.leadId,
-    INVOICE_MACHINE: data.invoiceNumber || "",
-    ORDER_QUANTITY_MACHINE: String(data.orderQuantity ?? ""),
-    ORDER_DEADLINE_MACHINE: data.orderDeadline || "",
   });
 }
 
@@ -103,7 +97,7 @@ export function generateCardDescription(data: JobCardData): string {
  * Parse machine data from card description
  */
 export function parseMachineData(description: string): Record<string, string> {
-  const machineDataMatch = description.match(/<!-- MACHINE DATA - DO NOT EDIT -->\s*<!--\s*([\s\S]*?)\s*-->/);
+  const machineDataMatch = description.match(/<!--\s*([\s\S]*?LEAD_ID:[\s\S]*?)\s*-->/);
   if (!machineDataMatch) return {};
 
   const lines = machineDataMatch[1].split("\n");

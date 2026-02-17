@@ -314,7 +314,7 @@ async function getLead(id: string): Promise<Lead | null> {
     quantity_value: (row.quantity_value as string | number | null) ?? null,
     quantity_rough: (row.quantity_rough as string | null) ?? null,
     preferred_deadline_date: (row.preferred_deadline_date as string | null) ?? null,
-    card_id: data.card_id,
+    card_id: (row.trello_card_id as string | null) ?? null,
     card_created: data.card_created,
   } as Lead;
 }

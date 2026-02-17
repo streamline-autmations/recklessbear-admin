@@ -87,7 +87,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
       delivery_date,
       booking_time,
       question,
-      card_id,
+      trello_card_id,
       card_created
     `)
     .order('submission_date', { ascending: false, nullsFirst: false })
@@ -178,7 +178,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
       delivery_date: lead.delivery_date,
       booking_time: lead.booking_time,
       question: lead.question,
-      card_id: lead.card_id,
+      card_id: lead.trello_card_id,
       card_created: lead.card_created,
     } as Lead;
   });

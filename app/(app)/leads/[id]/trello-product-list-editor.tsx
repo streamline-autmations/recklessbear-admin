@@ -69,8 +69,8 @@ export function TrelloProductListEditor({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = bomProducts || [];
-    if (!q) return list.slice(0, 12);
-    return list.filter((p) => p.product_type.toLowerCase().includes(q)).slice(0, 12);
+    if (!q) return list;
+    return list.filter((p) => p.product_type.toLowerCase().includes(q));
   }, [bomProducts, query]);
 
   const selectedSizes = useMemo(() => {

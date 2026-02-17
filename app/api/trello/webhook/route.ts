@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       production_stage: nextStage,
       updated_at: new Date().toISOString(),
     })
-    .eq("lead_id", job.lead_id);
+    .eq("id", job.lead_id);
 
   await supabase.from("job_stage_history").insert({
     job_id: job.id,

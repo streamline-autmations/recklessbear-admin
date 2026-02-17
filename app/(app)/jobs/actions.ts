@@ -86,7 +86,7 @@ export async function createJobAction(formData: FormData) {
   const { data: existingJob } = await supabase
     .from("jobs")
     .select("id, trello_card_id, trello_card_url, trello_list_id, production_stage")
-    .eq("lead_id", lead.lead_id)
+    .eq("lead_id", lead.id)
     .maybeSingle();
 
   if (existingJob?.trello_card_id) {
@@ -128,7 +128,7 @@ export async function createJobAction(formData: FormData) {
   const initialStage = listName.trim();
 
   const jobInsertPayload = {
-    lead_id: lead.lead_id,
+    lead_id: lead.id,
     trello_card_id: trelloResult.id,
     trello_card_url: trelloResult.url,
     trello_list_id: trelloResult.listId,
@@ -152,7 +152,7 @@ export async function createJobAction(formData: FormData) {
   await supabase
     .from("leads")
     .update({
-      card_id: trelloResult.id,
+      trello_card_id: trelloResult.id,
       card_created: true,
       sales_status: "Quote Approved",
       status: "Quote Approved",

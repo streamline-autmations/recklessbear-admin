@@ -95,6 +95,7 @@ export interface Lead {
   
   // Trello
   card_id?: string | null;
+  trello_card_id?: string | null;
   card_created?: boolean | null;
   
   // Additional fields (catch-all for any other columns)

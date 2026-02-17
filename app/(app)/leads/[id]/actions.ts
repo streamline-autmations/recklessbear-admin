@@ -227,10 +227,10 @@ export async function changeStatusAction(
   
   const modifierName = profile?.full_name || user.email || "Admin";
 
-  // Get current lead details (status, card_id, etc.)
+  // Get current lead details (status, trello card, etc.)
   const { data: currentLead } = await supabase
     .from("leads")
-    .select("status, card_id, lead_id, customer_name, name, production_stage")
+    .select("status, trello_card_id, lead_id, customer_name, name, production_stage")
     .eq("id", result.data.leadId)
     .single();
 
@@ -556,7 +556,7 @@ export async function createTrelloCardAction(
   }
 
   const leadSelect =
-    "id, lead_id, customer_name, name, email, phone, organization, status, sales_status, payment_status, production_stage, delivery_date, design_notes, trello_product_list, selected_apparel_items, card_id, card_created";
+    "id, lead_id, customer_name, name, email, phone, organization, status, sales_status, payment_status, production_stage, delivery_date, design_notes, trello_product_list, selected_apparel_items, trello_card_id, card_created";
 
   const { data: lead, error: leadError } = await supabase
     .from("leads")
@@ -576,17 +576,17 @@ export async function createTrelloCardAction(
   const { data: existingJob } = await supabase
     .from("jobs")
     .select("id, trello_card_id")
-    .eq("lead_id", lead.lead_id)
+    .eq("lead_id", lead.id)
     .maybeSingle();
 
-  if (existingJob?.trello_card_id || lead.card_id) {
+  if (existingJob?.trello_card_id || lead.trello_card_id) {
     return { message: "Trello card already created" };
   }
 
   const jobId = existingJob?.id || randomUUID();
 
   if (!existingJob?.id) {
-    const { error: jobInsertError } = await supabase.from("jobs").insert({ id: jobId, lead_id: lead.lead_id });
+    const { error: jobInsertError } = await supabase.from("jobs").insert({ id: jobId, lead_id: lead.id });
     if (jobInsertError) {
       return { error: "Failed to create job" };
     }
@@ -611,22 +611,16 @@ export async function createTrelloCardAction(
   const cardTitle = customerName && org ? `${customerName} — ${org} (${leadIdText})` : customerName ? `${customerName} (${leadIdText})` : `Lead ${leadIdText}`;
 
   const cardDescription = renderTrelloCardDescription({
-    INVOICE_NUMBER: "[Enter Invoice # Here]",
     PAYMENT_STATUS: String(lead.payment_status || "Pending"),
     JOB_ID: jobId,
-    ORDER_QUANTITY: "[Enter Total Quantity]",
     ORDER_DEADLINE: String(lead.delivery_date || "[Enter Deadline]"),
     PRODUCT_LIST: productList || "Product Name (STD)\n[Qty], [Size]",
     CUSTOMER_NAME: customerName || `Lead ${leadIdText}`,
-    PHONE: String(lead.phone || "[Enter Phone]"),
-    EMAIL: String(lead.email || "[Enter Email]"),
-    ORGANIZATION: org || "[Enter Organization]",
-    LOCATION: "[Enter Location]",
-    DESIGN_NOTES: String(lead.design_notes || "[Add any final design notes here]"),
+    ORGANIZATION: org,
+    PHONE: String(lead.phone || ""),
+    EMAIL: String(lead.email || ""),
+    DESIGN_NOTES: String(lead.design_notes || ""),
     LEAD_ID: leadIdText,
-    INVOICE_MACHINE: "",
-    ORDER_QUANTITY_MACHINE: "",
-    ORDER_DEADLINE_MACHINE: String(lead.delivery_date || ""),
   });
 
   const webhookUrl = process.env.N8N_CARD_CREATE_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/create-trello-card";
@@ -680,7 +674,7 @@ export async function createTrelloCardAction(
   await supabase.from("jobs").upsert(
     {
       id: jobId,
-      lead_id: lead.lead_id,
+      lead_id: lead.id,
       production_stage: lead.production_stage || "Orders Awaiting confirmation",
       payment_status: lead.payment_status || "Pending",
       trello_card_id: trelloCardId,
@@ -693,7 +687,7 @@ export async function createTrelloCardAction(
     await supabase
       .from("leads")
       .update({
-        card_id: trelloCardId,
+        trello_card_id: trelloCardId,
         card_created: true,
         updated_at: new Date().toISOString(),
       })
