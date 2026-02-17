@@ -50,7 +50,7 @@ export default function SetPasswordPage() {
         setError(error.message);
         return;
       }
-      router.replace("/dashboard");
+      window.location.assign("/dashboard");
     });
   }
 

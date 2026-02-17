@@ -47,7 +47,8 @@ export default function AuthCallbackPage() {
 
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
-      router.replace(type === "invite" ? "/auth/set-password" : "/dashboard");
+      const isInvite = type === "invite" || type === "signup" || type === "recovery" || !type;
+      window.location.assign(isInvite ? "/auth/set-password" : "/dashboard");
     };
 
     run();
@@ -80,4 +81,3 @@ export default function AuthCallbackPage() {
     </div>
   );
 }
-

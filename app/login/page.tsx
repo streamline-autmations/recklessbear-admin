@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,17 @@ import { loginAction } from "./actions";
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const raw = typeof window !== "undefined" ? window.location.hash : "";
+    if (!raw) return;
+    const hash = raw.startsWith("#") ? raw.slice(1) : raw;
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    if (!accessToken || !refreshToken) return;
+    window.location.replace(`/auth/callback${window.location.hash}`);
+  }, []);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
