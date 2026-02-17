@@ -16,6 +16,13 @@ export default function LoginPage() {
     if (!raw) return;
     const hash = raw.startsWith("#") ? raw.slice(1) : raw;
     const params = new URLSearchParams(hash);
+    const errorDescription =
+      params.get("error_description") || params.get("error") || params.get("message");
+    if (errorDescription) {
+      setError(errorDescription);
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      return;
+    }
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
     if (!accessToken || !refreshToken) return;
