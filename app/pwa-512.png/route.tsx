@@ -3,6 +3,9 @@ import { ImageResponse } from "next/og";
 export const runtime = "edge";
 
 export function GET() {
+  const logoUrl =
+    "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/RB_LOGO_NEW_btabo8.png";
+
   return new ImageResponse(
     (
       <div
@@ -12,14 +15,20 @@ export function GET() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#0b1f3b",
-          color: "#ffffff",
-          fontSize: 320,
-          fontWeight: 800,
-          letterSpacing: "-0.02em",
+          backgroundColor: "#ffffff",
         }}
       >
-        D
+        <img
+          src={logoUrl}
+          alt=""
+          width={384}
+          height={384}
+          style={{
+            width: 384,
+            height: 384,
+            objectFit: "contain",
+          }}
+        />
       </div>
     ),
     {
