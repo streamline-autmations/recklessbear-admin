@@ -1,20 +1,31 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PwaSwUpdater } from "@/components/pwa-sw-updater";
+
+export const viewport: Viewport = {
+  themeColor: "#0b1f3b",
+};
 
 export const metadata: Metadata = {
-  title: "RecklessBear Admin",
+  title: "reckless admin",
+  applicationName: "reckless admin",
   description: "RecklessBear Admin Dashboard",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
       {
-        url: "https://res.cloudinary.com/dnlgohkcc/image/upload/v1771311076/Logo-Black_oypd5f.png",
+        url: "/pwa-192.png",
+        type: "image/png",
+        sizes: "192x192",
       },
     ],
     apple: [
       {
-        url: "https://res.cloudinary.com/dnlgohkcc/image/upload/v1771311076/Logo-Black_oypd5f.png",
+        url: "/pwa-192.png",
+        type: "image/png",
+        sizes: "192x192",
       },
     ],
   },
@@ -35,6 +46,7 @@ export default function RootLayout({
           disableTransitionOnChange
           storageKey="rb-admin-theme"
         >
+          <PwaSwUpdater />
           {children}
           <Toaster />
         </ThemeProvider>

@@ -20,6 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { ConvocoreWidget } from "@/components/convocore-widget";
+import { PwaInstallBanner } from "@/components/pwa-install-banner";
 
 const OnboardingTour = dynamic(() => import("@/components/onboarding-tour").then((m) => m.OnboardingTour), {
   ssr: false,
@@ -217,6 +218,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
+        <PwaInstallBanner />
         <header className="flex items-center justify-between border-b border-border bg-background/70 backdrop-blur px-4 py-3 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
