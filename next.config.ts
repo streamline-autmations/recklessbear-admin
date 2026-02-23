@@ -23,6 +23,26 @@ export default withPWA({
     clientsClaim: true,
     runtimeCaching: [
       {
+        urlPattern: ({ url }) =>
+          url.pathname === "/manifest.webmanifest" ||
+          url.pathname === "/pwa-192.png" ||
+          url.pathname === "/pwa-512.png" ||
+          url.pathname === "/favicon-32.png" ||
+          url.pathname === "/favicon-16.png",
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "pwa-metadata",
+          networkTimeoutSeconds: 5,
+          expiration: {
+            maxEntries: 20,
+            maxAgeSeconds: 60 * 60,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      {
         urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/i,
         handler: "NetworkFirst",
         options: {

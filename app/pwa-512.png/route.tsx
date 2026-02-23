@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 export function GET() {
   const logoUrl =
-    "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/RB_LOGO_NEW_btabo8.png";
+    "https://res.cloudinary.com/dzhwylkfr/image/upload/v1769410062/Logo-Black_tl2hbv.png";
 
   return new ImageResponse(
     (
@@ -18,17 +18,7 @@ export function GET() {
           backgroundColor: "#ffffff",
         }}
       >
-        <img
-          src={logoUrl}
-          alt=""
-          width={384}
-          height={384}
-          style={{
-            width: 384,
-            height: 384,
-            objectFit: "contain",
-          }}
-        />
+        <img src={logoUrl} alt="" width={384} height={384} style={{ objectFit: "contain" }} />
       </div>
     ),
     {

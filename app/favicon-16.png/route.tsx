@@ -18,12 +18,12 @@ export function GET() {
           backgroundColor: "#ffffff",
         }}
       >
-        <img src={logoUrl} alt="" width={144} height={144} style={{ objectFit: "contain" }} />
+        <img src={logoUrl} alt="" width={14} height={14} style={{ objectFit: "contain" }} />
       </div>
     ),
     {
-      width: 192,
-      height: 192,
+      width: 16,
+      height: 16,
     }
   );
 }
