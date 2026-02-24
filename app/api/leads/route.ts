@@ -106,6 +106,12 @@ export async function POST(request: NextRequest) {
     last_modified_by: "system:lead-ingest-api",
   };
 
+  // Auto-assign new leads to Etienne Viljoen (CEO)
+  // user_id: a3c426f6-0695-45b4-a307-aedf930de925
+  if (!existing) {
+    update.assigned_rep_id = "a3c426f6-0695-45b4-a307-aedf930de925";
+  }
+
   for (const key of ["customer_name", "name", "email", "phone", "organization"] as const) {
     const value = incoming[key];
     if (typeof value === "string" && value.trim()) update[key] = value.trim();

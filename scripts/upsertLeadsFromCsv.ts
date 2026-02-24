@@ -456,6 +456,27 @@ async function upsertLeads(dryRun: boolean = false) {
     const totalBatches = Math.ceil(leads.length / BATCH_SIZE);
 
       try {
+        const leadIds = batch.map((l) => l.lead_id as string);
+        
+        // Check existing BEFORE upsert to know which are new
+        const { data: existing } = await supabase
+          .from("leads")
+          .select("lead_id")
+          .in("lead_id", leadIds);
+          
+        const existingIds = new Set(existing?.map((e) => e.lead_id) || []);
+        
+        const newLeads = batch.filter((l) => !existingIds.has(l.lead_id as string));
+        const updatedLeads = batch.filter((l) => existingIds.has(l.lead_id as string));
+        
+        // Auto-assign new leads to Etienne Viljoen (CEO)
+        // user_id: a3c426f6-0695-45b4-a307-aedf930de925
+        newLeads.forEach(lead => {
+            lead.assigned_rep_id = "a3c426f6-0695-45b4-a307-aedf930de925";
+        });
+        
+        inserted += newLeads.length;
+        updated += updatedLeads.length;
 
         const { data, error } = await supabase
           .from("leads")
@@ -469,57 +490,15 @@ async function upsertLeads(dryRun: boolean = false) {
           console.error(`❌ Batch ${batchNum}/${totalBatches} failed:`, error.message);
           console.error(`   Error details:`, error);
           failed += batch.length;
+          // Revert counts since upsert failed
+          inserted -= newLeads.length;
+          updated -= updatedLeads.length;
         } else {
-        // Check which were inserted vs updated by querying existing
-        const leadIds = batch.map((l) => l.lead_id as string);
-        const { data: existing } = await supabase
-          .from("leads")
-          .select("lead_id")
-          .in("lead_id", leadIds);
-
-        const existingIds = new Set(existing?.map((e) => e.lead_id) || []);
-        const newInBatch = batch.filter((l) => !existingIds.has(l.lead_id as string)).length;
-        const updatedInBatch = batch.length - newInBatch;
-
-        inserted += newInBatch;
-        updated += updatedInBatch;
-
-        console.log(
-          `✅ Batch ${batchNum}/${totalBatches}: ${batch.length} leads (${newInBatch} new, ${updatedInBatch} updated)`
-        );
-        
-        // Auto-assign new leads that don't have assigned_rep_id
-        if (newInBatch > 0) {
-          const newLeadIds = batch
-            .filter((l) => !existingIds.has(l.lead_id as string))
-            .map((l) => l.lead_id as string);
-          
-          for (const leadId of newLeadIds) {
-            try {
-              const { data: lead } = await supabase
-                .from("leads")
-                .select("assigned_rep_id")
-                .eq("lead_id", leadId)
-                .single();
-              
-              if (lead && !lead.assigned_rep_id) {
-                // Call RPC function to auto-assign
-                const { data: assignedRepId, error: assignError } = await supabase
-                  .rpc("assign_lead_auto", { p_lead_id: leadId });
-                
-                if (assignError) {
-                  console.warn(`   ⚠️  Could not auto-assign lead ${leadId}: ${assignError.message}`);
-                } else if (assignedRepId) {
-                  console.log(`   ✓ Auto-assigned lead ${leadId} to rep ${assignedRepId}`);
-                }
-              }
-            } catch (error) {
-              console.warn(`   ⚠️  Error auto-assigning lead ${leadId}:`, error);
-            }
-          }
+          console.log(
+            `✅ Batch ${batchNum}/${totalBatches}: ${batch.length} leads (${newLeads.length} new, ${updatedLeads.length} updated)`
+          );
         }
-      }
-    } catch (error) {
+      } catch (error) {
       console.error(`❌ Batch ${batchNum}/${totalBatches} error:`, error);
       failed += batch.length;
     }
