@@ -6,6 +6,9 @@ import { PwaSwUpdater } from "@/components/pwa-sw-updater";
 
 export const viewport: Viewport = {
   themeColor: "#0b1f3b",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -13,6 +16,11 @@ export const metadata: Metadata = {
   applicationName: "reckless admin",
   description: "RecklessBear Admin Dashboard",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "reckless admin",
+  },
   icons: {
     icon: [
       {
@@ -33,9 +41,9 @@ export const metadata: Metadata = {
     ],
     apple: [
       {
-        url: "/pwa-192.png?v=2",
+        url: "/apple-touch-icon.png?v=2",
         type: "image/png",
-        sizes: "192x192",
+        sizes: "180x180",
       },
     ],
   },

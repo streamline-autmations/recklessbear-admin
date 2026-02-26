@@ -55,7 +55,7 @@ export default async function RootRedirectPage() {
       }),
     }).catch(() => {});
     // #endregion agent log
-    redirect("/dashboard");
+    redirect("/leads");
   }
 
   redirect("/login");

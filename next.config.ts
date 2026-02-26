@@ -27,6 +27,9 @@ export default withPWA({
           url.pathname === "/manifest.webmanifest" ||
           url.pathname === "/pwa-192.png" ||
           url.pathname === "/pwa-512.png" ||
+          url.pathname === "/pwa-maskable-192.png" ||
+          url.pathname === "/pwa-maskable-512.png" ||
+          url.pathname === "/apple-touch-icon.png" ||
           url.pathname === "/favicon-32.png" ||
           url.pathname === "/favicon-16.png",
         handler: "NetworkFirst",

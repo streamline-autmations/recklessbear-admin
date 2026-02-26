@@ -46,14 +46,14 @@ export async function middleware(request: NextRequest) {
                            pathname.startsWith("/users") ||
                            pathname.startsWith("/settings");
 
-  // Handle root route: redirect to /dashboard if logged in, else /login
+  // Handle root route: redirect to /leads if logged in, else /login
   if (isRoot) {
-    return NextResponse.redirect(new URL(user ? "/dashboard" : "/login", request.url));
+    return NextResponse.redirect(new URL(user ? "/leads" : "/login", request.url));
   }
 
-  // If logged in and visiting /login, redirect to dashboard
+  // If logged in and visiting /login, redirect to leads
   if (user && isLoginPage) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/leads", request.url));
   }
 
   // If not logged in and trying to access protected route, redirect to login

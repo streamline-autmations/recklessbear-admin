@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { LeadDetailClient } from "./lead-detail-client";
-import { LeadQuickActions } from "./lead-quick-actions";
 import { loadLeadsFromSpreadsheet } from "@/lib/leads/importLeadsFromSpreadsheet";
 import type { Lead } from "@/types/leads";
 import { getViewer } from "@/lib/viewer";
@@ -426,48 +425,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">
-            {lead.customer_name || lead.name || "Unnamed Lead"}
-          </h1>
-          {lead.organization && (
-            <p className="text-muted-foreground">
-              {lead.organization} <span className="text-sm">({lead.lead_id})</span>
-            </p>
-          )}
-          {!lead.organization && (
-            <p className="text-sm text-muted-foreground">({lead.lead_id})</p>
-          )}
-          {/* Intent badges */}
-          {lead.intents && lead.intents.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {lead.intents.map((intent) => (
-                <span
-                  key={intent}
-                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs font-medium"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  {intent}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <LeadQuickActions
-          phone={lead.phone}
-          email={lead.email}
-          leadId={lead.lead_id}
-          dbId={lead.id}
-          name={lead.customer_name || lead.name}
-          cardId={lead.card_id}
-          isCeoOrAdmin={isCeoOrAdmin}
-          assignedRepId={lead.assigned_rep_id}
-        />
-      </div>
-
-      {/* Client Component with Action Panel and Tabs */}
+      <h1 className="text-3xl font-bold tracking-tight">{lead.customer_name || lead.name || "Unnamed Lead"}</h1>
       <LeadDetailClient
         leadId={lead.id || lead.lead_id || id}
         lead={lead}

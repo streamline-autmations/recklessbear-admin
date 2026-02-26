@@ -38,7 +38,7 @@ export async function loginAction(formData: FormData): Promise<{ error?: string 
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect("/leads");
 }
 
 export async function signOutAction(): Promise<void> {

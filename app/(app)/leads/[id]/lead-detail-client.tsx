@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
 import StatusBadge from "@/components/status-badge";
 import { AttachmentGallery } from "./attachment-gallery";
+import { LeadQuickActions } from "./lead-quick-actions";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
 import { ExternalLink, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw, Copy } from "lucide-react";
@@ -190,6 +191,20 @@ export function LeadDetailClient({
       !!lead.question_data && typeof lead.question_data === "object" && Object.keys(lead.question_data).length > 0;
     return !!lead.has_asked_question || !!lead.question || hasKeys;
   }, [lead]);
+
+  const suggestedDetailsTab = useMemo<LeadDetailTabValue>(() => {
+    if (hasQuoteData) return "quote";
+    if (hasBookingData) return "booking";
+    if (hasQuestionData) return "question";
+    return "overview";
+  }, [hasBookingData, hasQuestionData, hasQuoteData]);
+
+  const mobileDetailsCtaLabel = useMemo(() => {
+    if (suggestedDetailsTab === "quote") return "Tap to view Quote";
+    if (suggestedDetailsTab === "booking") return "Tap to view Booking";
+    if (suggestedDetailsTab === "question") return "Tap to view Question";
+    return "Tap to view Details";
+  }, [suggestedDetailsTab]);
 
   const visibleTabs = useMemo(() => {
     return leadDetailTabs.filter((tab) => {
@@ -1110,218 +1125,6 @@ export function LeadDetailClient({
         </DialogContent>
       </Dialog>
 
-      <Card data-tour="lead-next-action" className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{bannerState.title}</CardTitle>
-          <p className="text-sm text-muted-foreground">{bannerState.message}</p>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex flex-wrap gap-2">
-            {bannerState.kind === "unassigned" && (
-              <>
-                {!isCeoOrAdmin ? (
-                  <Button type="button" className="min-h-[44px]" onClick={assignLeadToMe} disabled={isBannerPending || !canUseDbActions()}>
-                    {isBannerPending ? "Assigning..." : "Assign to Me"}
-                  </Button>
-                ) : (
-                  <Button type="button" className="min-h-[44px]" onClick={focusRepAssign}>
-                    Assign Rep
-                  </Button>
-                )}
-              </>
-            )}
-
-            {bannerState.kind === "needs_contact" && (
-              <>
-                {lead.phone ? (
-                  <Button asChild className="min-h-[44px]">
-                    <a href={`tel:${lead.phone}`}>Call customer</a>
-                  </Button>
-                ) : lead.email ? (
-                  <Button asChild className="min-h-[44px]">
-                    <a href={`mailto:${lead.email}`}>Email customer</a>
-                  </Button>
-                ) : (
-                  <Button type="button" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
-                    {isStatusPending ? "Updating..." : "Mark contacted"}
-                  </Button>
-                )}
-                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
-                  {isStatusPending ? "Updating..." : "Mark contacted"}
-                </Button>
-                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                  Add note
-                </Button>
-              </>
-            )}
-
-            {bannerState.kind === "quote" && (
-              <>
-                <Button type="button" className="min-h-[44px]" onClick={() => setActiveTab("quote")}>
-                  Open quote details
-                </Button>
-                {lead.phone ? (
-                  <Button asChild variant="outline" className="min-h-[44px]">
-                    <a href={`tel:${lead.phone}`}>Call customer</a>
-                  </Button>
-                ) : lead.email ? (
-                  <Button asChild variant="outline" className="min-h-[44px]">
-                    <a href={`mailto:${lead.email}`}>Email customer</a>
-                  </Button>
-                ) : null}
-                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                  Add note
-                </Button>
-              </>
-            )}
-
-            {bannerState.kind === "ready_for_production" && (
-              <>
-                {isCeoOrAdmin ? (
-                  <Button type="button" className="min-h-[44px]" onClick={openTrelloPreview}>
-                    Preview Trello Card
-                  </Button>
-                ) : (
-                  <Button type="button" className="min-h-[44px]" disabled>
-                    Awaiting admin
-                  </Button>
-                )}
-              </>
-            )}
-
-            {bannerState.kind === "in_production" && bannerState.trelloUrl && (
-              <>
-                <Button asChild className="min-h-[44px]">
-                  <a href={bannerState.trelloUrl} target="_blank" rel="noopener noreferrer">
-                    Open Trello card
-                  </a>
-                </Button>
-                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                  Add note
-                </Button>
-              </>
-            )}
-
-            {bannerState.kind === "default" && (
-              <>
-                {lead.phone ? (
-                  <Button asChild className="min-h-[44px]">
-                    <a href={`tel:${lead.phone}`}>Call customer</a>
-                  </Button>
-                ) : lead.email ? (
-                  <Button asChild className="min-h-[44px]">
-                    <a href={`mailto:${lead.email}`}>Email customer</a>
-                  </Button>
-                ) : null}
-                <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                  Add note
-                </Button>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-[44px]"
-          onClick={() => setAdvancedOpen((v) => !v)}
-        >
-          {advancedOpen ? "Hide Advanced" : "Advanced"}
-        </Button>
-      </div>
-
-      {advancedOpen && (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4 w-full md:w-auto">
-              <div className="space-y-2 w-full sm:w-auto">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={selectedStatus}
-                  onValueChange={handleStatusChange}
-                  disabled={isStatusPending}
-                >
-                  <SelectTrigger id="status" className="min-h-[44px] w-full sm:w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="New">New</SelectItem>
-                    <SelectItem value="Assigned">Assigned</SelectItem>
-                    <SelectItem value="Contacted">Contacted</SelectItem>
-                    <SelectItem value="Quote Sent">Quote Sent</SelectItem>
-                    <SelectItem value="Quote Approved">Quote Approved</SelectItem>
-                    <SelectItem value="In Production">In Production</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Lost">Lost</SelectItem>
-                  </SelectContent>
-                </Select>
-                {statusError && (
-                  <p className="text-sm text-destructive">{statusError}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2 w-full sm:w-auto">
-                <Label htmlFor="rep">Assigned Rep</Label>
-                {isCeoOrAdmin ? (
-                  <>
-                    <Select
-                      value={selectedRepId}
-                      onValueChange={handleAssignRep}
-                      disabled={isRepPending}
-                    >
-                      <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                        {reps.map((rep) => (
-                          <SelectItem key={rep.id} value={rep.id}>
-                            {rep.name || rep.email || rep.id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {repError && (
-                      <p className="text-sm text-destructive">{repError}</p>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center h-[44px] px-3 border rounded-md bg-muted text-muted-foreground text-sm">
-                    {lead.assigned_rep_name || "Unassigned"}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge
-                status={
-                  (selectedStatus?.toLowerCase().replace(/\s+/g, "_") || "new") as
-                    | "new"
-                    | "assigned"
-                    | "contacted"
-                    | "quote_sent"
-                    | "quote_approved"
-                    | "in_production"
-                    | "completed"
-                    | "lost"
-                }
-              />
-              {lead.production_stage && (
-                <span className="inline-flex items-center rounded-md bg-secondary text-secondary-foreground px-2 py-1 text-xs font-medium border border-border">
-                  {lead.production_stage}
-                </span>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      )}
-
       {/* Tabs */}
       <Dialog open={arrangeTabsOpen} onOpenChange={setArrangeTabsOpen}>
         <DialogContent>
@@ -1379,14 +1182,20 @@ export function LeadDetailClient({
         <div className="mb-6 flex items-center justify-between gap-2">
           <div className="w-full sm:hidden">
             {!mobileDetailsOpen ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-[44px] w-full"
-                onClick={() => setMobileDetailsOpen(true)}
-              >
-                More details
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-[44px] w-full"
+                  onClick={() => {
+                    setMobileDetailsOpen(true);
+                    setActiveTab(suggestedDetailsTab);
+                  }}
+                >
+                  {mobileDetailsCtaLabel}
+                </Button>
+                <p className="text-xs text-muted-foreground">Overview is below.</p>
+              </div>
             ) : (
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -2067,6 +1876,232 @@ export function LeadDetailClient({
           )}
         </TabsContent>
       </Tabs>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          {lead.organization ? (
+            <div className="text-sm text-muted-foreground">{lead.organization}</div>
+          ) : null}
+          <div className="text-xs text-muted-foreground">Lead ID: {lead.lead_id || leadId}</div>
+          {lead.intents && lead.intents.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {lead.intents.map((intent) => (
+                <span
+                  key={intent}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs font-medium"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  {intent}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <LeadQuickActions
+          phone={lead.phone || null}
+          email={lead.email || null}
+          leadId={lead.lead_id || leadId}
+          dbId={lead.id || undefined}
+          name={lead.customer_name || lead.name || null}
+          cardId={lead.card_id || null}
+          isCeoOrAdmin={isCeoOrAdmin}
+          assignedRepId={lead.assigned_rep_id || null}
+        />
+
+        <Card data-tour="lead-next-action" className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{bannerState.title}</CardTitle>
+            <p className="text-sm text-muted-foreground">{bannerState.message}</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-2">
+              {bannerState.kind === "unassigned" ? (
+                !isCeoOrAdmin ? (
+                  <Button type="button" className="min-h-[44px]" onClick={assignLeadToMe} disabled={isBannerPending || !canUseDbActions()}>
+                    {isBannerPending ? "Assigning..." : "Assign to Me"}
+                  </Button>
+                ) : (
+                  <Button type="button" className="min-h-[44px]" onClick={focusRepAssign}>
+                    Assign Rep
+                  </Button>
+                )
+              ) : null}
+
+              {bannerState.kind === "needs_contact" ? (
+                <>
+                  {lead.phone ? (
+                    <Button asChild className="min-h-[44px]">
+                      <a href={`tel:${lead.phone}`}>Call customer</a>
+                    </Button>
+                  ) : lead.email ? (
+                    <Button asChild className="min-h-[44px]">
+                      <a href={`mailto:${lead.email}`}>Email customer</a>
+                    </Button>
+                  ) : (
+                    <Button type="button" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
+                      {isStatusPending ? "Updating..." : "Mark contacted"}
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
+                    {isStatusPending ? "Updating..." : "Mark contacted"}
+                  </Button>
+                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                    Add note
+                  </Button>
+                </>
+              ) : null}
+
+              {bannerState.kind === "quote" ? (
+                <>
+                  <Button type="button" className="min-h-[44px]" onClick={() => setActiveTab("quote")}>
+                    Open quote details
+                  </Button>
+                  {lead.phone ? (
+                    <Button asChild variant="outline" className="min-h-[44px]">
+                      <a href={`tel:${lead.phone}`}>Call customer</a>
+                    </Button>
+                  ) : lead.email ? (
+                    <Button asChild variant="outline" className="min-h-[44px]">
+                      <a href={`mailto:${lead.email}`}>Email customer</a>
+                    </Button>
+                  ) : null}
+                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                    Add note
+                  </Button>
+                </>
+              ) : null}
+
+              {bannerState.kind === "ready_for_production" ? (
+                isCeoOrAdmin ? (
+                  <Button type="button" className="min-h-[44px]" onClick={openTrelloPreview}>
+                    Preview Trello Card
+                  </Button>
+                ) : (
+                  <Button type="button" className="min-h-[44px]" disabled>
+                    Awaiting admin
+                  </Button>
+                )
+              ) : null}
+
+              {bannerState.kind === "in_production" && bannerState.trelloUrl ? (
+                <>
+                  <Button asChild className="min-h-[44px]">
+                    <a href={bannerState.trelloUrl} target="_blank" rel="noopener noreferrer">
+                      Open Trello card
+                    </a>
+                  </Button>
+                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                    Add note
+                  </Button>
+                </>
+              ) : null}
+
+              {bannerState.kind === "default" ? (
+                <>
+                  {lead.phone ? (
+                    <Button asChild className="min-h-[44px]">
+                      <a href={`tel:${lead.phone}`}>Call customer</a>
+                    </Button>
+                  ) : lead.email ? (
+                    <Button asChild className="min-h-[44px]">
+                      <a href={`mailto:${lead.email}`}>Email customer</a>
+                    </Button>
+                  ) : null}
+                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
+                    Add note
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center justify-between">
+          <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setAdvancedOpen((v) => !v)}>
+            {advancedOpen ? "Hide Advanced" : "Advanced"}
+          </Button>
+        </div>
+
+        {advancedOpen ? (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4 w-full md:w-auto">
+                  <div className="space-y-2 w-full sm:w-auto">
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={selectedStatus} onValueChange={handleStatusChange} disabled={isStatusPending}>
+                      <SelectTrigger id="status" className="min-h-[44px] w-full sm:w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="New">New</SelectItem>
+                        <SelectItem value="Assigned">Assigned</SelectItem>
+                        <SelectItem value="Contacted">Contacted</SelectItem>
+                        <SelectItem value="Quote Sent">Quote Sent</SelectItem>
+                        <SelectItem value="Quote Approved">Quote Approved</SelectItem>
+                        <SelectItem value="In Production">In Production</SelectItem>
+                        <SelectItem value="Completed">Completed</SelectItem>
+                        <SelectItem value="Lost">Lost</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {statusError ? <p className="text-sm text-destructive">{statusError}</p> : null}
+                  </div>
+
+                  <div className="space-y-2 w-full sm:w-auto">
+                    <Label htmlFor="rep">Assigned Rep</Label>
+                    {isCeoOrAdmin ? (
+                      <>
+                        <Select value={selectedRepId} onValueChange={handleAssignRep} disabled={isRepPending}>
+                          <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                            {reps.map((rep) => (
+                              <SelectItem key={rep.id} value={rep.id}>
+                                {rep.name || rep.email || rep.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {repError ? <p className="text-sm text-destructive">{repError}</p> : null}
+                      </>
+                    ) : (
+                      <div className="flex items-center h-[44px] px-3 border rounded-md bg-muted text-muted-foreground text-sm">
+                        {lead.assigned_rep_name || "Unassigned"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <StatusBadge
+                    status={
+                      (selectedStatus?.toLowerCase().replace(/\s+/g, "_") || "new") as
+                        | "new"
+                        | "assigned"
+                        | "contacted"
+                        | "quote_sent"
+                        | "quote_approved"
+                        | "in_production"
+                        | "completed"
+                        | "lost"
+                    }
+                  />
+                  {lead.production_stage ? (
+                    <span className="inline-flex items-center rounded-md bg-secondary text-secondary-foreground px-2 py-1 text-xs font-medium border border-border">
+                      {lead.production_stage}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -48,7 +48,7 @@ export default function AuthCallbackPage() {
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
       const isInvite = type === "invite" || type === "signup" || type === "recovery" || !type;
-      window.location.assign(isInvite ? "/auth/set-password" : "/dashboard");
+      window.location.assign(isInvite ? "/auth/set-password" : "/leads");
     };
 
     run();

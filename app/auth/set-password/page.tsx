@@ -50,7 +50,7 @@ export default function SetPasswordPage() {
         setError(error.message);
         return;
       }
-      window.location.assign("/dashboard");
+      window.location.assign("/leads");
     });
   }
 
