@@ -522,7 +522,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
             </div>
 
             <div className="flex w-full flex-row flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-col sm:items-end">
-              <Button asChild size="sm" className="h-9" data-tour="lead-open">
+              <Button asChild size="sm" className="min-h-[44px] sm:min-h-[36px]" data-tour="lead-open">
                 <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
               </Button>
 
@@ -532,7 +532,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-9"
+                      className="min-h-[44px] sm:min-h-[36px]"
                       disabled={isAssignPending}
                       onClick={() => handleAssignToMe(lead.id as string)}
                     >
@@ -543,7 +543,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-9"
+                      className="min-h-[44px] sm:min-h-[36px]"
                       onClick={() => openAssignForLead(leadKey)}
                       disabled={isAssignPending}
                     >
@@ -557,7 +557,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="h-9 gap-2"
+                  className="min-h-[44px] sm:min-h-[36px] gap-2"
                   disabled={isDeletePending}
                   onClick={() => handleDeleteLead(lead.id as string)}
                 >
@@ -587,7 +587,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
               </div>
               <Button
                 size="sm"
-                className="h-9"
+                className="min-h-[44px] sm:min-h-[36px]"
                 disabled={!assignSelectedRepId || isAssignPending}
                 onClick={() => handleAssignRep(lead.id as string, assignSelectedRepId)}
               >
@@ -815,11 +815,12 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                 <CardContent className="p-0">
                   <div className="overflow-x-auto -mx-4 md:mx-0">
                     <div className="inline-block min-w-full align-middle">
-                      <Table className="min-w-[760px]">
+                      <Table className="min-w-[880px] text-sm">
                         <TableHeader>
                           <TableRow>
                             <TableHead>Lead</TableHead>
                             <TableHead>Company</TableHead>
+                            <TableHead>Intent</TableHead>
                             <TableHead>Next</TableHead>
                             <TableHead>Rep</TableHead>
                             <TableHead>Submitted</TableHead>
@@ -829,6 +830,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                         <TableBody>
                           {focusFilteredLeads.map((lead) => {
                             const nextAction = getNextActionLabel(lead);
+                            const intents = buildIntents(lead);
                             const repName = lead.assigned_rep_name || getRepName(lead, reps) || "—";
                             const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
                             return (
@@ -838,6 +840,19 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                                   <div className="text-xs text-muted-foreground max-w-[260px] truncate">{lead.email || lead.phone || ""}</div>
                                 </TableCell>
                                 <TableCell className="max-w-[240px] truncate">{companyLabel}</TableCell>
+                                <TableCell>
+                                  {intents.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {intents.slice(0, 3).map((intent) => (
+                                        <span key={intent} className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
+                                          {intent}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
                                 <TableCell>
                                   <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
                                     {nextAction}
@@ -849,7 +864,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
-                                    <Button asChild className="min-h-[36px]" size="sm">
+                                    <Button asChild className="min-h-[44px] sm:min-h-[36px]" size="sm">
                                       <Link href={`/leads/${lead.lead_id || lead.id}`}>Open</Link>
                                     </Button>
                                     {!!isCeoOrAdmin && isUuid(lead.id) && (
@@ -857,7 +872,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
                                         type="button"
                                         variant="destructive"
                                         size="sm"
-                                        className="min-h-[36px] gap-2"
+                                        className="min-h-[44px] sm:min-h-[36px] gap-2"
                                         disabled={isDeletePending}
                                         onClick={() => handleDeleteLead(lead.id as string)}
                                       >
