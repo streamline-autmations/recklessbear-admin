@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { LeadDetailClient } from "./lead-detail-client";
 import { loadLeadsFromSpreadsheet } from "@/lib/leads/importLeadsFromSpreadsheet";
 import type { Lead } from "@/types/leads";
 import { getViewer } from "@/lib/viewer";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -425,6 +428,14 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Button asChild variant="ghost" size="sm" className="min-h-[44px] sm:min-h-[36px] px-2">
+          <Link href="/leads">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="ml-2">Back</span>
+          </Link>
+        </Button>
+      </div>
       <h1 className="text-3xl font-bold tracking-tight">{lead.customer_name || lead.name || "Unnamed Lead"}</h1>
       <LeadDetailClient
         leadId={lead.id || lead.lead_id || id}

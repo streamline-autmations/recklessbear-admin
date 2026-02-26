@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Reckless",
     id: "/",
     scope: "/",
-    start_url: "/dashboard?source=pwa",
+    start_url: "/leads?source=pwa",
     display: "standalone",
     display_override: ["standalone", "minimal-ui"],
     background_color: "#ffffff",
