@@ -14,15 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "next-themes";
-import dynamic from "next/dynamic";
-
-const OnboardingTour = dynamic(() => import("@/components/onboarding-tour").then((m) => m.OnboardingTour), {
-  ssr: false,
-});
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -44,6 +39,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const pathname = usePathname();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const themeForRender = mounted ? resolvedTheme : "light";
@@ -53,6 +49,75 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let timeoutId: number | null = null;
+    const show = () => {
+      setIsNavigating(true);
+      if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => setIsNavigating(false), 15000);
+    };
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function (...args) {
+      show();
+      return originalPushState.apply(this, args as unknown as [unknown, string, string]);
+    };
+    window.history.replaceState = function (...args) {
+      show();
+      return originalReplaceState.apply(this, args as unknown as [unknown, string, string]);
+    };
+
+    const onPopState = () => show();
+    window.addEventListener("popstate", onPopState);
+
+    const onClickCapture = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
+      if (e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+      let el = e.target as HTMLElement | null;
+      while (el) {
+        if (el instanceof HTMLAnchorElement) break;
+        el = el.parentElement;
+      }
+      if (!el || !(el instanceof HTMLAnchorElement)) return;
+
+      const href = el.getAttribute("href") || "";
+      if (!href) return;
+      if (el.target === "_blank") return;
+      if (href.startsWith("#")) return;
+      if (href.startsWith("mailto:") || href.startsWith("tel:")) return;
+
+      try {
+        const nextUrl = new URL(href, window.location.origin);
+        if (nextUrl.origin !== window.location.origin) return;
+        if (nextUrl.pathname === window.location.pathname && nextUrl.search === window.location.search) return;
+      } catch {
+        return;
+      }
+
+      show();
+    };
+
+    document.addEventListener("click", onClickCapture, true);
+
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener("popstate", onPopState);
+      document.removeEventListener("click", onClickCapture, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname]);
 
   useEffect(() => {
     try {
@@ -157,7 +222,14 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
 
   return (
     <div className="min-h-screen text-foreground flex">
-      <OnboardingTour />
+      {isNavigating ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-background px-6 py-4 shadow-lg">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          </div>
+        </div>
+      ) : null}
       <aside
         className={`hidden md:flex border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] p-4 flex-shrink-0 transition-[width] duration-200 ${
           isDesktopCollapsed ? "w-[92px] p-3" : "w-64 p-4"
