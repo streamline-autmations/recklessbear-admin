@@ -144,14 +144,14 @@ export async function getInviteLinkAction(
   // We can try "magiclink" first which logs them in directly, or "recovery" which lets them reset password.
   // Let's try magiclink as primary for this "copy link" feature since it's the most seamless.
   
-  let linkDataResult = await adminClient.auth.admin.generateLink({
+  const linkDataResult = await adminClient.auth.admin.generateLink({
     type: "magiclink",
     email: result.data.email,
     options: { redirectTo },
   });
 
   let linkData = linkDataResult.data;
-  let linkError = linkDataResult.error;
+  const linkError = linkDataResult.error;
 
   // If magiclink fails, fallback to invite link (for brand new users)
   if (linkError) {
