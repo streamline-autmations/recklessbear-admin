@@ -85,6 +85,93 @@ export async function updateUserAction(
   revalidatePath("/users");
 }
 
+const getInviteLinkSchema = z.object({
+  email: z.string().email(),
+});
+
+export async function getInviteLinkAction(
+  formData: FormData
+): Promise<{ error?: string; link?: string } | void> {
+  const rawFormData = {
+    email: formData.get("email") as string,
+  };
+
+  const result = getInviteLinkSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return { error: result.error.issues[0]?.message || "Invalid input" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can generate invite links" };
+  }
+
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_URL) {
+    return { error: "Server configuration error: Missing Supabase credentials" };
+  }
+
+  const { createClient: createAdminClient } = await import("@supabase/supabase-js");
+  const adminClient = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const baseUrl = await getAppBaseUrl();
+  if (!baseUrl) {
+    return { error: "Missing NEXT_PUBLIC_BASE_URL for invite redirect" };
+  }
+
+  const redirectTo = `${baseUrl}/auth/callback`;
+
+  // Try invite link first (works for new/unconfirmed users)
+  let { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+    type: "invite",
+    email: result.data.email,
+    options: { redirectTo },
+  });
+
+  // If invite link fails (e.g. user already registered/confirmed), try recovery link (password reset)
+  // or magiclink (login) which allows setting password if redirected correctly.
+  // We'll use magiclink as it logs them in directly.
+  if (linkError) {
+    console.log("[getInviteLinkAction] Invite link failed, trying magiclink fallback:", linkError.message);
+    const { data: magicData, error: magicError } = await adminClient.auth.admin.generateLink({
+      type: "magiclink",
+      email: result.data.email,
+      options: { redirectTo },
+    });
+    
+    if (magicError) {
+      return { error: magicError.message || "Failed to generate link" };
+    }
+    linkData = magicData;
+  }
+
+  const link = (linkData as unknown as { properties?: { action_link?: string } }).properties?.action_link;
+  
+  if (!link) {
+    return { error: "Failed to retrieve link from response" };
+  }
+
+  return { link };
+}
+
 const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   fullName: z.string().min(1, "Full name is required").max(255),

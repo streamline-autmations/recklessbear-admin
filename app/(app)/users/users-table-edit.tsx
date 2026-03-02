@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { deleteUserAction, updateUserAction } from "./actions";
+import { deleteUserAction, updateUserAction, getInviteLinkAction } from "./actions";
+import { LinkIcon } from "lucide-react";
 
 interface Profile {
   user_id: string;
@@ -37,6 +38,33 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
   const [role, setRole] = useState(initialUser.role);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isInvitePending, startInviteTransition] = useTransition();
+
+  function handleGetInviteLink() {
+    if (!initialUser.email) {
+      toast.error("User has no email address");
+      return;
+    }
+
+    startInviteTransition(async () => {
+      const formData = new FormData();
+      formData.set("email", initialUser.email!);
+      
+      const result = await getInviteLinkAction(formData);
+      
+      if (result && "error" in result && result.error) {
+        toast.error(result.error);
+      } else if (result && "link" in result && result.link) {
+        try {
+          await navigator.clipboard.writeText(result.link);
+          toast.success("Invite link copied to clipboard!");
+        } catch {
+          // Fallback if clipboard API fails (e.g. non-secure context)
+          prompt("Copy this invite link:", result.link);
+        }
+      }
+    });
+  }
 
   function handleSave() {
     setError(null);
@@ -156,6 +184,16 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleGetInviteLink}
+            disabled={isPending || isInvitePending}
+            className="min-h-[44px] w-[44px]"
+            title="Copy Invite Link"
+          >
+            <LinkIcon className="h-4 w-4" />
+          </Button>
           <Button
             variant="outline"
             size="sm"
