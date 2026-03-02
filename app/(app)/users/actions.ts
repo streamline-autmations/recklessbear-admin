@@ -140,30 +140,44 @@ export async function getInviteLinkAction(
   const redirectTo = `${baseUrl}/auth/callback`;
 
   // Try invite link first (works for new/unconfirmed users)
-  const linkDataResult = await adminClient.auth.admin.generateLink({
-    type: "invite",
+  // For users who have already been invited or confirmed, generateLink with type "invite" might fail or return an expired link.
+  // We can try "magiclink" first which logs them in directly, or "recovery" which lets them reset password.
+  // Let's try magiclink as primary for this "copy link" feature since it's the most seamless.
+  
+  let linkDataResult = await adminClient.auth.admin.generateLink({
+    type: "magiclink",
     email: result.data.email,
     options: { redirectTo },
   });
 
   let linkData = linkDataResult.data;
-  const linkError = linkDataResult.error;
+  let linkError = linkDataResult.error;
 
-  // If invite link fails (e.g. user already registered/confirmed), try recovery link (password reset)
-  // or magiclink (login) which allows setting password if redirected correctly.
-  // We'll use magiclink as it logs them in directly.
+  // If magiclink fails, fallback to invite link (for brand new users)
   if (linkError) {
-    console.log("[getInviteLinkAction] Invite link failed, trying magiclink fallback:", linkError.message);
-    const { data: magicData, error: magicError } = await adminClient.auth.admin.generateLink({
-      type: "magiclink",
+    console.log("[getInviteLinkAction] Magic link failed, trying invite link fallback:", linkError.message);
+    const inviteResult = await adminClient.auth.admin.generateLink({
+      type: "invite",
       email: result.data.email,
       options: { redirectTo },
     });
     
-    if (magicError) {
-      return { error: magicError.message || "Failed to generate link" };
+    if (inviteResult.error) {
+      // Last resort: recovery link (password reset)
+      console.log("[getInviteLinkAction] Invite link failed, trying recovery link fallback:", inviteResult.error.message);
+      const recoveryResult = await adminClient.auth.admin.generateLink({
+        type: "recovery",
+        email: result.data.email,
+        options: { redirectTo },
+      });
+
+      if (recoveryResult.error) {
+        return { error: recoveryResult.error.message || "Failed to generate link" };
+      }
+      linkData = recoveryResult.data;
+    } else {
+      linkData = inviteResult.data;
     }
-    linkData = magicData;
   }
 
   const link = (linkData as unknown as { properties?: { action_link?: string } }).properties?.action_link;
