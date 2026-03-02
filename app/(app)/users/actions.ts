@@ -140,11 +140,14 @@ export async function getInviteLinkAction(
   const redirectTo = `${baseUrl}/auth/callback`;
 
   // Try invite link first (works for new/unconfirmed users)
-  let { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+  let linkDataResult = await adminClient.auth.admin.generateLink({
     type: "invite",
     email: result.data.email,
     options: { redirectTo },
   });
+
+  let linkData = linkDataResult.data;
+  const linkError = linkDataResult.error;
 
   // If invite link fails (e.g. user already registered/confirmed), try recovery link (password reset)
   // or magiclink (login) which allows setting password if redirected correctly.

@@ -210,7 +210,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
       router.push(`/leads?${currentParams.toString()}`);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, router]);
+  }, [searchQuery, router, searchParams]);
 
   // Update filters
   useEffect(() => {
@@ -229,7 +229,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
     }
 
     router.push(`/leads?${currentParams.toString()}`);
-  }, [statusFilter, assignedRepFilter, router]);
+  }, [statusFilter, assignedRepFilter, router, searchParams]);
 
   // Map rep names to leads
   const leadsWithRepNames = useMemo(() => {

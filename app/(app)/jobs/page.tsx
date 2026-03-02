@@ -81,11 +81,7 @@ async function getJobsBoardLeads(): Promise<Lead[]> {
 }
 
 
-export default async function JobsPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string };
-}) {
+export default async function JobsPage() {
   const leads = await getJobsBoardLeads();
 
   return (
