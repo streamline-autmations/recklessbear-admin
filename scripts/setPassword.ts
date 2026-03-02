@@ -34,12 +34,14 @@ async function setPassword() {
 
   // 1. Find the user ID
   // Note: We can't select * from auth.users directly with the JS client usually, but admin.listUsers works
-  const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+  const { data, error: listError } = await supabase.auth.admin.listUsers();
   
   if (listError) {
     console.error("❌ Error listing users:", listError.message);
     return;
   }
+
+  const users = data.users;
 
   // Find fuzzy match if exact match fails
   let user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
