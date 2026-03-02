@@ -175,11 +175,13 @@ function isUuid(value: string | null | undefined): boolean {
 
 export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdmin }: LeadsTableClientProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [intentFilters, setIntentFilters] = useState<Set<string>>(new Set());
-  const [assignedRepFilter, setAssignedRepFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") || "all");
+  const [intentFilters, setIntentFilters] = useState<Set<string>>(new Set()); // Client-side for now, can move to URL later if needed
+  const [assignedRepFilter, setAssignedRepFilter] = useState<string>(searchParams.get("rep") || "all");
   const [sortBy, setSortBy] = useState<"updated" | "submitted">("updated");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [focusTab, setFocusTab] = useState<FocusTab>("needs_action");
@@ -189,6 +191,45 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [isDeletePending, startDeleteTransition] = useTransition();
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const realtimeRefreshTimerRef = useRef<number | null>(null);
+
+  // Debounced search update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentParams = new URLSearchParams(window.location.search);
+      if (searchQuery.trim()) {
+        currentParams.set("q", searchQuery.trim());
+      } else {
+        currentParams.delete("q");
+      }
+      
+      // Reset page to 1 on new search
+      if (searchQuery.trim() !== (searchParams.get("q") || "")) {
+        currentParams.delete("page");
+      }
+      
+      router.push(`/leads?${currentParams.toString()}`);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, router]);
+
+  // Update filters
+  useEffect(() => {
+    const currentParams = new URLSearchParams(window.location.search);
+    
+    if (statusFilter !== "all") currentParams.set("status", statusFilter);
+    else currentParams.delete("status");
+    
+    if (assignedRepFilter !== "all") currentParams.set("rep", assignedRepFilter);
+    else currentParams.delete("rep");
+
+    // Reset page to 1 on filter change
+    if (statusFilter !== (searchParams.get("status") || "all") || 
+        assignedRepFilter !== (searchParams.get("rep") || "all")) {
+      currentParams.delete("page");
+    }
+
+    router.push(`/leads?${currentParams.toString()}`);
+  }, [statusFilter, assignedRepFilter, router]);
 
   // Map rep names to leads
   const leadsWithRepNames = useMemo(() => {
@@ -305,56 +346,27 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
     });
   };
 
-  // Client-side filtering
+  // Client-side filtering (removed, now handled by server)
   const filteredLeads = useMemo(() => {
     let filtered = leadsWithRepNames;
 
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((lead) => {
-        const name = lead.name?.toLowerCase() || "";
-        const email = lead.email?.toLowerCase() || "";
-        const phone = lead.phone?.toLowerCase() || "";
-        const organization = lead.organization?.toLowerCase() || "";
-        const leadId = lead.lead_id?.toLowerCase() || "";
-
-        return (
-          name.includes(query) ||
-          email.includes(query) ||
-          phone.includes(query) ||
-          organization.includes(query) ||
-          leadId.includes(query)
-        );
-      });
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((lead) => (lead.status || "").toLowerCase() === statusFilter.toLowerCase());
-    }
-
-    // Intent filter (OR logic - show if ANY selected intent matches)
+    // Search filter is now handled by server
+    
+    // Status filter is now handled by server
+    
+    // Intent filter (still client-side for now as it's complex)
     if (intentFilters.size > 0) {
       filtered = filtered.filter((lead) => {
         const intents = buildIntents(lead);
-        // Check if lead has ANY of the selected intents
         return Array.from(intentFilters).some((selectedIntent) =>
           intents.includes(selectedIntent)
         );
       });
     }
 
-    // Assigned rep filter
-    if (assignedRepFilter !== "all") {
-      if (assignedRepFilter === "unassigned") {
-        filtered = filtered.filter((lead) => !lead.assigned_rep_id);
-      } else {
-        filtered = filtered.filter((lead) => lead.assigned_rep_id === assignedRepFilter);
-      }
-    }
+    // Assigned rep filter is now handled by server
 
-    // Apply sorting
+    // Apply sorting (client-side sorting of current page)
     if (sortBy === "submitted") {
       filtered.sort((a, b) => {
         const dateA = new Date(a.submission_date || a.created_at || 0).getTime();
@@ -371,7 +383,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
     }
 
     return filtered;
-  }, [leadsWithRepNames, searchQuery, statusFilter, intentFilters, assignedRepFilter, sortBy]);
+  }, [leadsWithRepNames, intentFilters, sortBy]);
 
   const focusFilteredLeads = useMemo(() => {
     return filteredLeads.filter((lead) => matchesFocusTab(lead, focusTab));

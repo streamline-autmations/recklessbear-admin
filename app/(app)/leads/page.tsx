@@ -43,7 +43,13 @@ async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Re
   }));
 }
 
-async function getLeadsPage(params: { page: number; pageSize: number }): Promise<{ leads: Lead[]; hasNextPage: boolean }> {
+async function getLeadsPage(params: {
+  page: number;
+  pageSize: number;
+  query?: string;
+  status?: string;
+  rep?: string;
+}): Promise<{ leads: Lead[]; hasNextPage: boolean }> {
   const { supabase, user } = await getViewer();
   const allowSpreadsheetFallback = process.env.NODE_ENV !== "production";
   const cutoff = new Date();
@@ -52,21 +58,6 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
 
   if (!user) {
     console.error('Authentication error: missing user session');
-    if (allowSpreadsheetFallback) {
-      try {
-        const spreadsheetLeads = (await loadLeadsFromSpreadsheet()).filter((lead) => {
-          const dateString = (lead.submission_date || lead.created_at || "").toString();
-          const time = Date.parse(dateString);
-          if (Number.isNaN(time)) return true;
-          return time >= Date.parse(cutoffIso);
-        });
-        if (spreadsheetLeads.length > 0) {
-          console.log(`[leads-page] Not authenticated, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-          return { leads: spreadsheetLeads, hasNextPage: false };
-        }
-      } catch {
-      }
-    }
     return { leads: [], hasNextPage: false };
   }
 
@@ -86,7 +77,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
   } catch {
   }
 
-  const query = leadClient
+  let queryBuilder = leadClient
     .from('leads')
     .select([
       "id",
@@ -116,12 +107,32 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
       "card_id",
       "card_created",
     ].join(","))
-    .gte('created_at', cutoffIso)
+    .gte('created_at', cutoffIso);
+
+  // Apply server-side filters
+  if (params.query) {
+    const q = params.query;
+    queryBuilder = queryBuilder.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,organization.ilike.%${q}%,lead_id.ilike.%${q}%`);
+  }
+
+  if (params.status && params.status !== "all") {
+    queryBuilder = queryBuilder.eq('status', params.status);
+  }
+
+  if (params.rep && params.rep !== "all") {
+    if (params.rep === "unassigned") {
+      queryBuilder = queryBuilder.is('assigned_rep_id', null);
+    } else {
+      queryBuilder = queryBuilder.eq('assigned_rep_id', params.rep);
+    }
+  }
+
+  queryBuilder = queryBuilder
     .order('created_at', { ascending: false })
     .order('lead_id', { ascending: false })
-    .range(start, endInclusive)
+    .range(start, endInclusive);
   
-  const { data: leadsData, error } = await query;
+  const { data: leadsData, error } = await queryBuilder;
 
   if (error) {
     if (!(allowSpreadsheetFallback && error.code === "42703")) {
@@ -131,22 +142,6 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
         hint: error.hint,
         code: error.code,
       });
-    }
-    if (allowSpreadsheetFallback) {
-      try {
-        const spreadsheetLeads = (await loadLeadsFromSpreadsheet()).filter((lead) => {
-          const dateString = (lead.submission_date || lead.created_at || "").toString();
-          const time = Date.parse(dateString);
-          if (Number.isNaN(time)) return true;
-          return time >= Date.parse(cutoffIso);
-        });
-        if (spreadsheetLeads.length > 0) {
-          console.log(`[leads-page] Supabase error, loaded ${spreadsheetLeads.length} leads from spreadsheet`);
-          return { leads: spreadsheetLeads, hasNextPage: false };
-        }
-      } catch (spreadsheetError) {
-        console.error("[leads-page] Spreadsheet fallback also failed:", spreadsheetError);
-      }
     }
     return { leads: [], hasNextPage: false };
   }
@@ -236,15 +231,19 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams?: { page?: string };
+  searchParams?: Promise<{ page?: string; q?: string; status?: string; rep?: string }>;
 }) {
   const { supabase, user, userRole } = await getViewer();
+  const params = await searchParams;
   const pageSize = 200;
-  const rawPage = searchParams?.page ? Number.parseInt(searchParams.page, 10) : 1;
+  const rawPage = params?.page ? Number.parseInt(params.page, 10) : 1;
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const query = params?.q || "";
+  const status = params?.status || "all";
+  const rep = params?.rep || "all";
 
   const [{ leads, hasNextPage }, reps] = await Promise.all([
-    getLeadsPage({ page, pageSize }),
+    getLeadsPage({ page, pageSize, query, status, rep }),
     getUsersForAssignment(supabase),
   ]);
 
@@ -295,11 +294,17 @@ export default async function LeadsPage({
 
           <div className="flex items-center justify-between">
             <Button asChild variant="outline" className="min-h-[44px]" disabled={page <= 1}>
-              <Link href={page <= 1 ? "/leads" : `/leads?page=${page - 1}`}>Previous</Link>
+              <Link href={{
+                pathname: "/leads",
+                query: { ...params, page: page <= 1 ? 1 : page - 1 }
+              }}>Previous</Link>
             </Button>
             <div className="text-sm text-muted-foreground">Page {page}</div>
             <Button asChild variant="outline" className="min-h-[44px]" disabled={!hasNextPage}>
-              <Link href={hasNextPage ? `/leads?page=${page + 1}` : "/leads"}>Next</Link>
+              <Link href={{
+                pathname: "/leads",
+                query: { ...params, page: hasNextPage ? page + 1 : page }
+              }}>Next</Link>
             </Button>
           </div>
         </div>
