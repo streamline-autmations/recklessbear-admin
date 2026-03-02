@@ -41,14 +41,14 @@ async function setPassword() {
     return;
   }
 
-  const users = data.users;
+  const users: any[] = data.users;
 
   // Find fuzzy match if exact match fails
-  let user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+  let user = users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
   
   if (!user) {
     console.log("⚠️ Exact email match not found. Searching for 'zander'...");
-    user = users.find(u => u.email?.toLowerCase().includes("zander"));
+    user = users.find((u: any) => u.email?.toLowerCase().includes("zander"));
   }
 
   if (!user) {
