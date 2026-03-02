@@ -140,7 +140,7 @@ export async function getInviteLinkAction(
   const redirectTo = `${baseUrl}/auth/callback`;
 
   // Try invite link first (works for new/unconfirmed users)
-  let linkDataResult = await adminClient.auth.admin.generateLink({
+  const linkDataResult = await adminClient.auth.admin.generateLink({
     type: "invite",
     email: result.data.email,
     options: { redirectTo },
