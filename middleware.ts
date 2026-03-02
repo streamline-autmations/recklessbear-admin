@@ -53,6 +53,10 @@ export async function middleware(request: NextRequest) {
 
   // If logged in and visiting /login, redirect to leads
   if (user && isLoginPage) {
+    const mode = request.nextUrl.searchParams.get("mode");
+    if (mode === "set-password") {
+      return response;
+    }
     return NextResponse.redirect(new URL("/leads", request.url));
   }
 

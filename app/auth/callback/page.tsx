@@ -17,6 +17,24 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const run = async () => {
+      const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const code = searchParams.get("code");
+      const typeFromSearch = searchParams.get("type");
+
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          setError(exchangeError.message);
+          return;
+        }
+
+        const nextType = typeFromSearch || "invite";
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const isInvite = nextType === "invite" || nextType === "signup" || nextType === "recovery" || !nextType;
+        window.location.assign(isInvite ? "/login?mode=set-password" : "/leads");
+        return;
+      }
+
       const params = readHashParams();
 
       const errorDescription =
@@ -48,7 +66,7 @@ export default function AuthCallbackPage() {
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
       const isInvite = type === "invite" || type === "signup" || type === "recovery" || !type;
-      window.location.assign(isInvite ? "/auth/set-password" : "/leads");
+      window.location.assign(isInvite ? "/login?mode=set-password" : "/leads");
     };
 
     run();
