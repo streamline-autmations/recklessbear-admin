@@ -639,7 +639,7 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant={viewMode === "outline"}
+            variant="outline"
             className="min-h-[44px] gap-2 justify-start"
             onClick={() => setFiltersOpen((v) => !v)}
           >
