@@ -62,7 +62,7 @@ async function setPassword() {
   // 2. Update the password
   console.log(`🔄 Setting password to: ${targetPassword}`);
   
-  const { data, error: updateError } = await supabase.auth.admin.updateUserById(
+  const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(
     user.id,
     { password: targetPassword }
   );
