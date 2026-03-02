@@ -7,6 +7,9 @@ import { PageHeader } from '@/components/page-header';
 import { getViewer } from "@/lib/viewer";
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { AutoAssignAllButton } from "./auto-assign-all-button";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const revalidate = 10;
 
@@ -17,6 +20,7 @@ interface Rep {
 }
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createSupabaseClient>>;
+type DbClient = { from: SupabaseClient["from"] };
 
 /**
  * Get users for assignment (from profiles table)
@@ -69,9 +73,49 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
   const start = Math.max(0, (params.page - 1) * params.pageSize);
   const endInclusive = start + params.pageSize;
 
-  const query = supabase
+  let leadClient: DbClient = supabase as unknown as DbClient;
+  try {
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (SUPABASE_SERVICE_ROLE_KEY && SUPABASE_URL) {
+      const { createClient: createAdminClient } = await import("@supabase/supabase-js");
+      leadClient = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      }) as unknown as DbClient;
+    }
+  } catch {
+  }
+
+  const query = leadClient
     .from('leads')
-    .select('*')
+    .select([
+      "id",
+      "lead_id",
+      "customer_name",
+      "name",
+      "email",
+      "phone",
+      "organization",
+      "status",
+      "sales_status",
+      "payment_status",
+      "production_stage",
+      "assigned_rep_id",
+      "has_requested_quote",
+      "has_booked_call",
+      "has_asked_question",
+      "created_at",
+      "updated_at",
+      "submission_date",
+      "last_modified",
+      "last_modified_by",
+      "last_activity_at",
+      "delivery_date",
+      "booking_time",
+      "question",
+      "card_id",
+      "card_created",
+    ].join(","))
     .gte('created_at', cutoffIso)
     .order('created_at', { ascending: false })
     .order('lead_id', { ascending: false })
@@ -107,7 +151,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
     return { leads: [], hasNextPage: false };
   }
 
-  const rows = leadsData || [];
+  const rows = (leadsData as unknown as Record<string, unknown>[]) || [];
   const hasNextPage = rows.length > params.pageSize;
   const pageRows = hasNextPage ? rows.slice(0, params.pageSize) : rows;
 
@@ -128,7 +172,7 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
   }
 
   // Transform Supabase data to Lead format and build intents array
-  const leads = (pageRows || []).map((lead: Record<string, unknown>) => {
+  const leads = (pageRows || []).map((lead) => {
     const pickString = (v: unknown): string | null => {
       if (v === null || v === undefined) return null;
       if (typeof v === "string") return v;
@@ -189,12 +233,17 @@ async function getLeadsPage(params: { page: number; pageSize: number }): Promise
 }
 
 
-export default async function LeadsPage() {
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   const { supabase, user, userRole } = await getViewer();
-  const pageSize = 10000;
-  const page = 1;
+  const pageSize = 200;
+  const rawPage = searchParams?.page ? Number.parseInt(searchParams.page, 10) : 1;
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
 
-  const [{ leads }, reps] = await Promise.all([
+  const [{ leads, hasNextPage }, reps] = await Promise.all([
     getLeadsPage({ page, pageSize }),
     getUsersForAssignment(supabase),
   ]);
@@ -227,21 +276,33 @@ export default async function LeadsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Leads List ({leads.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LeadsTableClient
-              initialLeads={leads}
-              reps={reps}
-              currentUserId={user?.id || undefined}
-              isCeoOrAdmin={isCeoOrAdmin}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Leads List ({leads.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadsTableClient
+                initialLeads={leads}
+                reps={reps}
+                currentUserId={user?.id || undefined}
+                isCeoOrAdmin={isCeoOrAdmin}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="flex items-center justify-between">
+            <Button asChild variant="outline" className="min-h-[44px]" disabled={page <= 1}>
+              <Link href={page <= 1 ? "/leads" : `/leads?page=${page - 1}`}>Previous</Link>
+            </Button>
+            <div className="text-sm text-muted-foreground">Page {page}</div>
+            <Button asChild variant="outline" className="min-h-[44px]" disabled={!hasNextPage}>
+              <Link href={hasNextPage ? `/leads?page=${page + 1}` : "/leads"}>Next</Link>
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -7,8 +7,10 @@ import type { Lead } from "@/types/leads";
 import { getViewer } from "@/lib/viewer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type DbClient = { from: SupabaseClient["from"] };
 
 interface LeadDetailPageProps {
   params: Promise<{ id: string }>;
@@ -69,8 +71,22 @@ async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Re
  * Tries spreadsheet first, then falls back to Supabase
  */
 async function getLead(id: string): Promise<Lead | null> {
-  // Prefer Supabase (needed for status updates + Trello/job creation)
+  const { user } = await getViewer();
+  const allowSpreadsheetFallback = process.env.NODE_ENV !== "production";
+
   const supabase = await createClient();
+  let leadClient: DbClient = supabase as unknown as DbClient;
+  try {
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (SUPABASE_SERVICE_ROLE_KEY && SUPABASE_URL && user) {
+      const { createClient: createAdminClient } = await import("@supabase/supabase-js");
+      leadClient = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      }) as unknown as DbClient;
+    }
+  } catch {
+  }
 
   // Select all required fields
   const fields = `
@@ -142,7 +158,7 @@ async function getLead(id: string): Promise<Lead | null> {
   `;
 
   // Try by UUID first
-  let query = supabase
+  let query = leadClient
     .from("leads")
     .select(fields)
     .eq("id", id)
@@ -152,7 +168,7 @@ async function getLead(id: string): Promise<Lead | null> {
 
   // If not found by UUID, try by lead_id
   if (error || !data) {
-    query = supabase
+    query = leadClient
       .from("leads")
       .select(fields)
       .eq("lead_id", id)
@@ -166,6 +182,7 @@ async function getLead(id: string): Promise<Lead | null> {
   if (error || !data) {
     // Final fallback: spreadsheet (read-only view)
     try {
+      if (!allowSpreadsheetFallback) return null;
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
       if (spreadsheetLeads.length > 0) {
         let lead = spreadsheetLeads.find((l) => l.lead_id === id);
