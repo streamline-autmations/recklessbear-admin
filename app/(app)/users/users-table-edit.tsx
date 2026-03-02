@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { deleteUserAction, updateUserAction, getInviteLinkAction } from "./actions";
-import { LinkIcon } from "lucide-react";
+import { deleteUserAction, updateUserAction, getInviteLinkAction, updateUserPasswordAction } from "./actions";
+import { LinkIcon, KeyRound } from "lucide-react";
 
 interface Profile {
   user_id: string;
@@ -33,9 +33,11 @@ interface UsersTableEditProps {
 export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTableEditProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [fullName, setFullName] = useState(initialUser.full_name || "");
   const [phone, setPhone] = useState(initialUser.phone || "");
   const [role, setRole] = useState(initialUser.role);
+  const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isInvitePending, startInviteTransition] = useTransition();
@@ -57,10 +59,10 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
       } else if (result && "link" in result && result.link) {
         try {
           await navigator.clipboard.writeText(result.link);
-          toast.success("Invite link copied to clipboard!");
+          toast.success("Login link copied to clipboard!");
         } catch {
           // Fallback if clipboard API fails (e.g. non-secure context)
-          prompt("Copy this invite link:", result.link);
+          prompt("Copy this login link:", result.link);
         }
       }
     });
@@ -87,12 +89,39 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
     });
   }
 
+  function handleSavePassword() {
+    setError(null);
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("userId", initialUser.user_id);
+    formData.set("password", newPassword);
+
+    startTransition(async () => {
+      const result = await updateUserPasswordAction(formData);
+      if (result && "error" in result) {
+        setError(result.error);
+        toast.error(result.error);
+      } else {
+        setIsChangingPassword(false);
+        setNewPassword("");
+        toast.success("Password updated successfully");
+        router.refresh();
+      }
+    });
+  }
+
   function handleCancel() {
     setFullName(initialUser.full_name || "");
     setPhone(initialUser.phone || "");
     setRole(initialUser.role);
+    setNewPassword("");
     setError(null);
     setIsEditing(false);
+    setIsChangingPassword(false);
   }
 
   function handleDelete() {
@@ -114,6 +143,44 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
         router.refresh();
       }
     });
+  }
+
+  if (isChangingPassword) {
+    return (
+      <TableRow>
+        <TableCell colSpan={4}>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">New Password:</span>
+            <Input
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password (min 6 chars)"
+              className="min-h-[44px] max-w-[300px]"
+              autoFocus
+            />
+          </div>
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSavePassword} disabled={isPending || newPassword.length < 6}>
+                {isPending ? "Saving..." : "Set Password"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        </TableCell>
+      </TableRow>
+    );
   }
 
   if (isEditing) {
@@ -190,9 +257,19 @@ export function UsersTableEdit({ user: initialUser, canDelete = false }: UsersTa
             onClick={handleGetInviteLink}
             disabled={isPending || isInvitePending}
             className="min-h-[44px] w-[44px]"
-            title="Copy Invite Link"
+            title="Copy Login Link"
           >
             <LinkIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsChangingPassword(true)}
+            disabled={isPending}
+            className="min-h-[44px] w-[44px]"
+            title="Set Password"
+          >
+            <KeyRound className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"

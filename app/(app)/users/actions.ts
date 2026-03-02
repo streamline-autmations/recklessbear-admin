@@ -85,6 +85,70 @@ export async function updateUserAction(
   revalidatePath("/users");
 }
 
+const updateUserPasswordSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export async function updateUserPasswordAction(
+  formData: FormData
+): Promise<{ error?: string } | void> {
+  const rawFormData = {
+    userId: formData.get("userId") as string,
+    password: formData.get("password") as string,
+  };
+
+  const result = updateUserPasswordSchema.safeParse(rawFormData);
+  if (!result.success) {
+    return {
+      error: result.error.issues[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Check if user is CEO/Admin
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile || (profile.role !== "ceo" && profile.role !== "admin")) {
+    return { error: "Unauthorized: Only CEO/Admin can change passwords" };
+  }
+
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_URL) {
+    return { error: "Server configuration error: Missing Supabase credentials" };
+  }
+
+  const { createClient: createAdminClient } = await import("@supabase/supabase-js");
+  const adminClient = createAdminClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const { error: updateError } = await adminClient.auth.admin.updateUserById(
+    result.data.userId,
+    { password: result.data.password }
+  );
+
+  if (updateError) {
+    return { error: updateError.message || "Failed to update password" };
+  }
+
+  revalidatePath("/users");
+}
+
 const getInviteLinkSchema = z.object({
   email: z.string().email(),
 });
