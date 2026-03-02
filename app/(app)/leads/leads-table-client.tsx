@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -173,9 +173,9 @@ function isUuid(value: string | null | undefined): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdmin }: LeadsTableClientProps) {
+function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdmin }: LeadsTableClientProps) {
   const router = useRouter();
-  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const searchParams = useSearchParams();
   
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
@@ -195,7 +195,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
   // Debounced search update
   useEffect(() => {
     const timer = setTimeout(() => {
-      const currentParams = new URLSearchParams(window.location.search);
+      const currentParams = new URLSearchParams(searchParams.toString());
       if (searchQuery.trim()) {
         currentParams.set("q", searchQuery.trim());
       } else {
@@ -214,7 +214,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
 
   // Update filters
   useEffect(() => {
-    const currentParams = new URLSearchParams(window.location.search);
+    const currentParams = new URLSearchParams(searchParams.toString());
     
     if (statusFilter !== "all") currentParams.set("status", statusFilter);
     else currentParams.delete("status");
@@ -639,7 +639,7 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant={viewMode === "outline"}
             className="min-h-[44px] gap-2 justify-start"
             onClick={() => setFiltersOpen((v) => !v)}
           >
@@ -908,5 +908,13 @@ export function LeadsTableClient({ initialLeads, reps, currentUserId, isCeoOrAdm
         )}
       </div>
     </div>
+  );
+}
+
+export function LeadsTableClient(props: LeadsTableClientProps) {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading filters...</div>}>
+      <LeadsTableClientContent {...props} />
+    </Suspense>
   );
 }
