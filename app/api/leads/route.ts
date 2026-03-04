@@ -128,11 +128,26 @@ export async function POST(request: NextRequest) {
   const { data: upserted, error: upsertError } = await supabase
     .from("leads")
     .upsert(update, { onConflict: "lead_id", ignoreDuplicates: false })
-    .select("id, lead_id, has_requested_quote, has_booked_call, has_asked_question, quote_data, booking_data, question_data")
+    .select("id, lead_id, customer_name, email, phone, organization, status, assigned_rep_id, created_at, updated_at")
     .single();
 
   if (upsertError || !upserted) {
     return NextResponse.json({ error: upsertError?.message || "Failed to upsert lead" }, { status: 500 });
+  }
+
+  // Fire webhook for new/updated lead if configured
+  const webhookUrl = process.env.NEW_LEAD_WEBHOOK_URL;
+  if (webhookUrl) {
+    // Fire and forget - don't block the response
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: existing ? "lead.updated" : "lead.created",
+        lead: upserted,
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch((err) => console.error("Failed to send lead webhook:", err));
   }
 
   return NextResponse.json({ ok: true, lead: upserted });
