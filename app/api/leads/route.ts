@@ -136,7 +136,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Fire webhook for new/updated lead if configured
-  const webhookUrl = process.env.NEW_LEAD_WEBHOOK_URL;
+  // Prioritize NEW_LEAD_WEBHOOK_URL env var, otherwise fallback to hardcoded n8n webhook
+  const webhookUrl = process.env.NEW_LEAD_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/supabase/lead-assigned";
+  
   if (webhookUrl) {
     // Fire and forget - don't block the response
     fetch(webhookUrl, {
