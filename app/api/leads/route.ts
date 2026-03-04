@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
   const { data: upserted, error: upsertError } = await supabase
     .from("leads")
     .upsert(update, { onConflict: "lead_id", ignoreDuplicates: false })
-    .select("id, lead_id, customer_name, email, phone, organization, status, assigned_rep_id, created_at, updated_at")
+    .select("id, lead_id, customer_name, email, phone, organization, status, assigned_rep_id, created_at, updated_at, has_booked_call, has_asked_question, has_requested_quote")
     .single();
 
   if (upsertError || !upserted) {
@@ -140,15 +140,38 @@ export async function POST(request: NextRequest) {
   const webhookUrl = process.env.NEW_LEAD_WEBHOOK_URL || "https://dockerfile-1n82.onrender.com/webhook/supabase/lead-assigned";
   
   if (webhookUrl) {
+    // Determine lead_type based on flags
+    let leadType = "unknown";
+    if (upserted.has_requested_quote) leadType = "quote";
+    else if (upserted.has_booked_call) leadType = "call";
+    else if (upserted.has_asked_question) leadType = "question";
+
+    // Construct flat payload matching user request
+    const payload = {
+      email: upserted.email || null,
+      phone: upserted.phone || null,
+      status: upserted.status || "New",
+      lead_id: upserted.lead_id,
+      lead_type: leadType,
+      company_name: upserted.organization || null,
+      organization: upserted.organization || null,
+      customer_name: upserted.customer_name || null,
+      rep_alert_sent: false, // Default for new payload
+      assigned_rep_id: upserted.assigned_rep_id || null,
+      has_booked_call: upserted.has_booked_call || false,
+      has_asked_question: upserted.has_asked_question || false,
+      has_requested_quote: upserted.has_requested_quote || false,
+      
+      // Metadata fields from original request
+      webhookUrl: webhookUrl,
+      executionMode: process.env.NODE_ENV === "production" ? "production" : "development"
+    };
+
     // Fire and forget - don't block the response
     fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: existing ? "lead.updated" : "lead.created",
-        lead: upserted,
-        timestamp: new Date().toISOString(),
-      }),
+      body: JSON.stringify(payload),
     }).catch((err) => console.error("Failed to send lead webhook:", err));
   }
 
