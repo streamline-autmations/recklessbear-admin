@@ -43,21 +43,23 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
   const typeLabel =
     d.lead_type === "quote"
-      ? "Quote"
+      ? "Quote request"
       : d.lead_type === "call"
-      ? "Call"
+      ? "Call booked"
       : d.lead_type === "question"
       ? "Question"
-      : "New Lead";
+      : "Lead";
 
-  const name = d.customer_name?.trim() || "New lead";
+  const name = d.customer_name?.trim() || "Unknown";
   const org = (d.organization || d.company_name || "").toString().trim();
-  const detail = [org, d.phone, d.email].filter(Boolean).join(" · ");
+  const detail = [`${typeLabel} from ${name}`, org, d.phone, d.email]
+    .filter(Boolean)
+    .join(" · ");
 
   try {
     const result = await sendPushToAllAdmins({
-      title: `${typeLabel} — ${name}`,
-      body: detail || `Lead ${d.lead_id || ""}`.trim(),
+      title: "New lead assigned",
+      body: detail,
       url: "/leads",
       tag: `lead-${d.lead_id || Date.now()}`,
       data: { lead_id: d.lead_id ?? null, lead_type: d.lead_type ?? null },
