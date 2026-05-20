@@ -40,14 +40,6 @@ interface Rep {
   email?: string | null;
 }
 
-async function getCurrentUserRole(): Promise<string | null> {
-  const { user, userRole } = await getViewer();
-  return user ? userRole : null;
-}
-
-/**
- * Get users for assignment (from profiles table)
- */
 async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Rep[]> {
   const { data, error } = await supabase
     .from("profiles")
@@ -66,10 +58,82 @@ async function getUsersForAssignment(supabase: ServerSupabaseClient): Promise<Re
   }));
 }
 
-/**
- * Get lead by ID (from URL param, which could be lead_id or UUID)
- * Tries spreadsheet first, then falls back to Supabase
- */
+const LEAD_FIELDS = `
+  id,
+  lead_id,
+  customer_name,
+  name,
+  email,
+  phone,
+  organization,
+  status,
+  lead_type,
+  source,
+  sales_status,
+  payment_status,
+  production_stage,
+  assigned_rep_id,
+  has_requested_quote,
+  has_booked_call,
+  has_asked_question,
+  created_at,
+  updated_at,
+  submission_date,
+  last_modified,
+  last_modified_by,
+  last_activity_at,
+  date_approved,
+  delivery_date,
+  date_delivered_collected,
+  date_completed,
+  category,
+  product_type,
+  accessories_selected,
+  include_warmups,
+  quantity_range,
+  has_deadline,
+  message,
+  design_notes,
+  attachments,
+  trello_product_list,
+  booking_time,
+  booking_approved,
+  pre_call_notes,
+  question,
+  question_data,
+  quote_data,
+  booking_data,
+  apparel_interest,
+  selected_apparel_items,
+  corporate_items,
+  schoolwear_items,
+  gym_items,
+  sports_kits_selected,
+  rugby_items,
+  soccer_items,
+  cricket_items,
+  netball_items,
+  hockey_items,
+  athletics_items,
+  golf_items,
+  fishing_items,
+  warmup_kit,
+  quantity_known,
+  quantity_value,
+  quantity_rough,
+  preferred_deadline_date,
+  card_id,
+  card_created
+`;
+
+async function getLeadRow(client: DbClient, id: string) {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (isUuid) {
+    return client.from("leads").select(LEAD_FIELDS).eq("id", id).maybeSingle();
+  }
+  return client.from("leads").select(LEAD_FIELDS).eq("lead_id", id).maybeSingle();
+}
+
 async function getLead(id: string): Promise<Lead | null> {
   const { user } = await getViewer();
   const allowSpreadsheetFallback = process.env.NODE_ENV !== "production";
@@ -88,99 +152,9 @@ async function getLead(id: string): Promise<Lead | null> {
   } catch {
   }
 
-  // Select all required fields
-  const fields = `
-    id, 
-    lead_id, 
-    customer_name,
-    name, 
-    email, 
-    phone,
-    organization,
-    status, 
-    lead_type,
-    source,
-    sales_status,
-    payment_status,
-    production_stage,
-    assigned_rep_id,
-    has_requested_quote,
-    has_booked_call,
-    has_asked_question,
-    created_at,
-    updated_at,
-    submission_date,
-    last_modified,
-    last_modified_by,
-    last_activity_at,
-    date_approved,
-    delivery_date,
-    date_delivered_collected,
-    date_completed,
-    category,
-    product_type,
-    accessories_selected,
-    include_warmups,
-    quantity_range,
-    has_deadline,
-    message,
-    design_notes,
-    attachments,
-    trello_product_list,
-    booking_time,
-    booking_approved,
-    pre_call_notes,
-    question,
-    question_data,
-    quote_data,
-    booking_data,
-    apparel_interest,
-    selected_apparel_items,
-    corporate_items,
-    schoolwear_items,
-    gym_items,
-    sports_kits_selected,
-    rugby_items,
-    soccer_items,
-    cricket_items,
-    netball_items,
-    hockey_items,
-    athletics_items,
-    golf_items,
-    fishing_items,
-    warmup_kit,
-    quantity_known,
-    quantity_value,
-    quantity_rough,
-    preferred_deadline_date,
-    card_id,
-    card_created
-  `;
-
-  // Try by UUID first
-  let query = leadClient
-    .from("leads")
-    .select(fields)
-    .eq("id", id)
-    .single();
-
-  let { data, error } = await query;
-
-  // If not found by UUID, try by lead_id
-  if (error || !data) {
-    query = leadClient
-      .from("leads")
-      .select(fields)
-      .eq("lead_id", id)
-      .single();
-    
-    const result = await query;
-    data = result.data;
-    error = result.error;
-  }
+  const { data, error } = await getLeadRow(leadClient, id);
 
   if (error || !data) {
-    // Final fallback: spreadsheet (read-only view)
     try {
       if (!allowSpreadsheetFallback) return null;
       const spreadsheetLeads = await loadLeadsFromSpreadsheet();
@@ -193,10 +167,7 @@ async function getLead(id: string): Promise<Lead | null> {
               (l.name && String(l.name).toLowerCase() === id.toLowerCase())
           );
         }
-        if (lead) {
-          console.log(`[lead-detail] Found lead in spreadsheet (no DB row): ${lead.lead_id}`);
-          return lead;
-        }
+        if (lead) return lead;
       }
     } catch (spreadsheetError) {
       console.error("[lead-detail] Error loading from spreadsheet:", spreadsheetError);
@@ -204,29 +175,22 @@ async function getLead(id: string): Promise<Lead | null> {
     return null;
   }
 
-  // Fetch assigned rep name from profiles table if assigned
   let assignedRepName: string | null = null;
   if (data.assigned_rep_id) {
     const { data: user } = await supabase
       .from("profiles")
       .select("full_name, email")
       .eq("user_id", data.assigned_rep_id)
-      .single();
+      .maybeSingle();
     assignedRepName = user?.full_name || user?.email || null;
   }
 
-  // Build intents array from flags ONLY (canonical 3 intents)
-  // Flags are the source of truth after normalization
   const intents: string[] = [];
   if (data.has_requested_quote) intents.push("Quote");
   if (data.has_booked_call) intents.push("Booking");
   if (data.has_asked_question) intents.push("Question");
-  
-  // TEMPORARY FALLBACK: Only infer from field data if ALL 3 flags are false
-  // This is for legacy leads that haven't been normalized yet
-  // TODO: Remove this fallback after all leads are normalized
+
   if (!data.has_requested_quote && !data.has_booked_call && !data.has_asked_question) {
-    // Strong evidence for Quote
     const hasQuoteEvidence = !!(
       (data.quote_data && typeof data.quote_data === 'object' && data.quote_data && Object.keys(data.quote_data).length > 0) ||
       data.attachments ||
@@ -240,28 +204,25 @@ async function getLead(id: string): Promise<Lead | null> {
       data.trello_product_list ||
       data.delivery_date
     );
-    
-    // Strong evidence for Booking
+
     const hasBookingEvidence = !!(
       data.booking_time ||
       (data.booking_approved && data.booking_approved !== 'false' && data.booking_approved !== '') ||
       (data.booking_data && typeof data.booking_data === 'object' && data.booking_data && Object.keys(data.booking_data).length > 0) ||
       data.pre_call_notes
     );
-    
-    // Strong evidence for Question
+
     const hasQuestionEvidence = !!(
       data.question ||
       (data.question_data && typeof data.question_data === 'object' && data.question_data && Object.keys(data.question_data).length > 0)
     );
-    
+
     if (hasQuoteEvidence) intents.push("Quote");
     if (hasBookingEvidence) intents.push("Booking");
     if (hasQuestionEvidence) intents.push("Question");
   }
-  
-  // Ensure only canonical intents (no duplicates)
-  const canonicalIntents = Array.from(new Set(intents)).filter(intent => 
+
+  const canonicalIntents = Array.from(new Set(intents)).filter((intent) =>
     ["Quote", "Booking", "Question"].includes(intent)
   );
 
@@ -338,7 +299,6 @@ async function getLead(id: string): Promise<Lead | null> {
   } as Lead;
 }
 
-
 async function getNotes(supabase: ServerSupabaseClient, leadId: string): Promise<Note[]> {
   const { data, error } = await supabase
     .from("lead_notes")
@@ -347,10 +307,7 @@ async function getNotes(supabase: ServerSupabaseClient, leadId: string): Promise
     .order("created_at", { ascending: false });
 
   if (error) {
-    // Ignore invalid UUID error, just return empty array
-    if (error.code === "22P02") {
-      return [];
-    }
+    if (error.code === "22P02") return [];
     console.error("Error fetching notes:", error);
     return [];
   }
@@ -384,10 +341,7 @@ async function getEvents(supabase: ServerSupabaseClient, leadId: string): Promis
     .order("created_at", { ascending: false });
 
   if (error) {
-    // Ignore invalid UUID error, just return empty array
-    if (error.code === "22P02") {
-      return [];
-    }
+    if (error.code === "22P02") return [];
     console.error("Error fetching events:", JSON.stringify(error, null, 2));
     return [];
   }
@@ -406,37 +360,38 @@ type JobSummary = {
 async function getJobForLead(supabase: ServerSupabaseClient, lead: Lead): Promise<JobSummary | null> {
   const baseSelect = "id, trello_card_id, trello_card_url, trello_list_id, production_stage";
 
-  const { data: byText, error: byTextError } = await supabase.from("jobs").select(baseSelect).eq("lead_id", lead.lead_id).maybeSingle();
-  if (!byTextError && byText) return byText as unknown as JobSummary;
-
-  if (lead.id) {
-    const { data: byUuid, error: byUuidError } = await supabase.from("jobs").select(baseSelect).eq("lead_id", lead.id).maybeSingle();
-    if (!byUuidError && byUuid) return byUuid as unknown as JobSummary;
+  const filters: string[] = [`lead_id.eq.${lead.lead_id}`];
+  if (lead.id && lead.id !== lead.lead_id) {
+    filters.push(`lead_id.eq.${lead.id}`);
   }
 
-  return null;
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(baseSelect)
+    .or(filters.join(","))
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as unknown as JobSummary;
 }
 
 export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const { id } = await params;
 
-  const { supabase } = await getViewer();
+  const { supabase, userRole } = await getViewer();
   const lead = await getLead(id);
 
   if (!lead) {
     notFound();
   }
 
-  // Use lead.id (UUID) for notes and events queries
-  // If lead came from spreadsheet and has no UUID id, we can't fetch notes/events
-  // Check if lead.id is a valid UUID (simple regex check)
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
   const leadDbId = isUuid ? lead.id : null;
 
-  const [notes, events, userRole, reps, job] = await Promise.all([
+  const [notes, events, reps, job] = await Promise.all([
     leadDbId ? getNotes(supabase, leadDbId) : Promise.resolve([]),
     leadDbId ? getEvents(supabase, leadDbId) : Promise.resolve([]),
-    getCurrentUserRole(),
     getUsersForAssignment(supabase),
     getJobForLead(supabase, lead),
   ]);

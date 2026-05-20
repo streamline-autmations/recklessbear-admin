@@ -1,143 +1,71 @@
+import { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { PageHeader } from '@/components/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, TrendingUp, UserPlus, Users } from 'lucide-react';
+import { getViewer } from '@/lib/viewer';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Cache for dashboard stats - revalidate every 30 seconds
-// This significantly improves page load speed by caching database queries
-export const revalidate = 30;
+type ServerSupabase = SupabaseClient;
 
-async function getCurrentUserRole(): Promise<string | null> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role, user_id')
-    .eq('user_id', user.id)
-    .single();
-
-  if (error) {
-    console.error('Profile lookup error:', error);
-  }
-
-  return data?.role || null;
-}
-
-async function getRepLeadsCount(userId: string): Promise<number> {
-  const supabase = await createClient();
-
-  const { count, error } = await supabase
+async function getRepLeadsCount(supabase: ServerSupabase, userId: string): Promise<number> {
+  const { count } = await supabase
     .from('leads')
-    .select('*', { count: 'estimated', head: true })
+    .select('id', { count: 'estimated', head: true })
     .eq('assigned_rep_id', userId);
-
-  if (error) {
-    console.error('Error fetching rep leads count:', error);
-    return 0;
-  }
-
   return count || 0;
 }
 
-async function getTotalLeads(): Promise<number> {
-  const supabase = await createClient();
-
-  const { count, error } = await supabase
-    .from('leads')
-    .select('*', { count: 'estimated', head: true });
-
-  if (error) {
-    console.error('Error fetching total leads:', error);
-    return 0;
-  }
-
-  return count || 0;
-}
-
-async function getLeadsLast7Days(): Promise<number> {
-  const supabase = await createClient();
-
+async function getStats(supabase: ServerSupabase) {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const { count, error } = await supabase
-    .from('leads')
-    .select('*', { count: 'estimated', head: true })
-    .gte('created_at', sevenDaysAgo.toISOString());
-
-  if (error) {
-    console.error('Error fetching leads last 7 days:', error);
-    return 0;
-  }
-
-  return count || 0;
-}
-
-async function getUnassignedLeads(): Promise<number> {
-  const supabase = await createClient();
-
-  const { count, error } = await supabase
-    .from('leads')
-    .select('*', { count: 'exact', head: true })
-    .is('assigned_rep_id', null);
-
-  if (error) {
-    console.error('Error fetching unassigned leads:', error);
-    return 0;
-  }
-
-  return count || 0;
-}
-
-async function getLeadsByStatus(): Promise<Record<string, number>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from('leads')
-    .select('status');
-
-  if (error) {
-    console.error('Error fetching leads by status:', error);
-    return {};
-  }
-
-  const counts: Record<string, number> = {};
-  data?.forEach((lead) => {
-    const status = lead.status || 'Unknown';
-    counts[status] = (counts[status] || 0) + 1;
-  });
-
-  return counts;
-}
-
-async function getStaleLeads(): Promise<number> {
-  const supabase = await createClient();
-
   const fortyEightHoursAgo = new Date();
   fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
 
-  const { count, error } = await supabase
+  const [total, last7, unassigned, stale] = await Promise.all([
+    supabase.from('leads').select('id', { count: 'estimated', head: true }),
+    supabase
+      .from('leads')
+      .select('id', { count: 'estimated', head: true })
+      .gte('created_at', sevenDaysAgo.toISOString()),
+    supabase
+      .from('leads')
+      .select('id', { count: 'estimated', head: true })
+      .is('assigned_rep_id', null),
+    supabase
+      .from('leads')
+      .select('id', { count: 'estimated', head: true })
+      .lt('updated_at', fortyEightHoursAgo.toISOString())
+      .neq('status', 'Quote Approved'),
+  ]);
+
+  return {
+    totalLeads: total.count || 0,
+    leadsLast7Days: last7.count || 0,
+    unassignedLeads: unassigned.count || 0,
+    staleLeads: stale.count || 0,
+  };
+}
+
+async function getLeadsByStatus(supabase: ServerSupabase): Promise<Record<string, number>> {
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const { data, error } = await supabase
     .from('leads')
-    .select('*', { count: 'exact', head: true })
-    .lt('updated_at', fortyEightHoursAgo.toISOString())
-    .neq('status', 'Quote Approved');
+    .select('status')
+    .gte('created_at', ninetyDaysAgo.toISOString())
+    .limit(5000);
 
-  if (error) {
-    console.error('Error fetching stale leads:', error);
-    return 0;
+  if (error || !data) return {};
+
+  const counts: Record<string, number> = {};
+  for (const lead of data) {
+    const status = (lead as { status?: string | null }).status || 'Unknown';
+    counts[status] = (counts[status] || 0) + 1;
   }
-
-  return count || 0;
+  return counts;
 }
 
 type StockSummary = {
@@ -146,28 +74,27 @@ type StockSummary = {
   critical_count: number;
 };
 
-async function getStockSummary(): Promise<StockSummary> {
-  const supabase = await createClient();
+async function getStockSummary(supabase: ServerSupabase): Promise<StockSummary> {
   const { data, error } = await supabase
     .from('materials_inventory')
     .select('qty_on_hand, minimum_level, restock_threshold');
 
-  if (error) {
-    console.error('Error fetching stock summary:', error);
+  if (error || !data) {
     return { total_materials: 0, low_count: 0, critical_count: 0 };
   }
 
   let low = 0;
   let critical = 0;
-  for (const row of data || []) {
-    const qty = Number((row as { qty_on_hand?: unknown }).qty_on_hand ?? 0);
-    const min = Number((row as { minimum_level?: unknown }).minimum_level ?? 0);
-    const restock = Number((row as { restock_threshold?: unknown }).restock_threshold ?? 0);
+  for (const row of data) {
+    const r = row as { qty_on_hand?: unknown; minimum_level?: unknown; restock_threshold?: unknown };
+    const qty = Number(r.qty_on_hand ?? 0);
+    const min = Number(r.minimum_level ?? 0);
+    const restock = Number(r.restock_threshold ?? 0);
     if (qty <= min) critical += 1;
     else if (qty <= restock) low += 1;
   }
 
-  return { total_materials: (data || []).length, low_count: low, critical_count: critical };
+  return { total_materials: data.length, low_count: low, critical_count: critical };
 }
 
 interface RepWorkload {
@@ -176,51 +103,234 @@ interface RepWorkload {
   lead_count: number;
 }
 
-async function getRepWorkload(): Promise<RepWorkload[]> {
-  const supabase = await createClient();
-
-  // Get all reps
-  const { data: reps, error: repsError } = await supabase
-    .from('profiles')
-    .select('user_id, full_name')
-    .eq('role', 'rep');
-
-  if (repsError || !reps) {
-    console.error('Error fetching reps:', repsError);
-    return [];
-  }
-
-  // Get lead counts for each rep
-  const workloads: RepWorkload[] = [];
-  for (const rep of reps) {
-    const { count, error } = await supabase
+async function getRepWorkload(supabase: ServerSupabase): Promise<RepWorkload[]> {
+  const [{ data: reps }, { data: assigned }] = await Promise.all([
+    supabase.from('profiles').select('user_id, full_name').eq('role', 'rep'),
+    supabase
       .from('leads')
-      .select('*', { count: 'exact', head: true })
-      .eq('assigned_rep_id', rep.user_id);
+      .select('assigned_rep_id')
+      .not('assigned_rep_id', 'is', null),
+  ]);
 
-    if (!error) {
-      workloads.push({
-        rep_id: rep.user_id,
-        rep_name: rep.full_name,
-        lead_count: count || 0,
-      });
-    }
+  if (!reps) return [];
+
+  const counts = new Map<string, number>();
+  for (const row of assigned || []) {
+    const id = (row as { assigned_rep_id: string | null }).assigned_rep_id;
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
   }
 
-  // Sort by lead count descending
-  return workloads.sort((a, b) => b.lead_count - a.lead_count);
+  return (reps as Array<{ user_id: string; full_name: string | null }>)
+    .map((rep) => ({
+      rep_id: rep.user_id,
+      rep_name: rep.full_name,
+      lead_count: counts.get(rep.user_id) || 0,
+    }))
+    .sort((a, b) => b.lead_count - a.lead_count);
+}
+
+async function StatsCards() {
+  const { supabase } = await getViewer();
+  const { totalLeads, leadsLast7Days, unassignedLeads, staleLeads } = await getStats(supabase);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
+          <Users className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-semibold tracking-tight">{totalLeads}</div>
+          <p className="text-xs text-muted-foreground">All time</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Last 7 Days</CardTitle>
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-semibold tracking-tight">{leadsLast7Days}</div>
+          <p className="text-xs text-muted-foreground">New leads</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Unassigned</CardTitle>
+          <UserPlus className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-semibold tracking-tight">{unassignedLeads}</div>
+          <p className="text-xs text-muted-foreground">Need assignment</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Stale Leads</CardTitle>
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-semibold tracking-tight text-destructive">{staleLeads}</div>
+          <p className="text-xs text-muted-foreground">No update in 48h+</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function StatsCardsSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-8 w-16 mb-1" />
+            <Skeleton className="h-3 w-20" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+async function StockSummaryCard() {
+  const { supabase } = await getViewer();
+  const stockSummary = await getStockSummary(supabase);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Stock Summary</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <div className="text-2xl font-semibold tracking-tight">{stockSummary.total_materials}</div>
+            <p className="text-xs text-muted-foreground">Materials</p>
+          </div>
+          <div>
+            <div className="text-2xl font-semibold tracking-tight">{stockSummary.low_count}</div>
+            <p className="text-xs text-muted-foreground">Low</p>
+          </div>
+          <div>
+            <div className="text-2xl font-semibold tracking-tight text-destructive">{stockSummary.critical_count}</div>
+            <p className="text-xs text-muted-foreground">Critical</p>
+          </div>
+        </div>
+        <Button asChild className="min-h-[44px]">
+          <Link href="/stock">Open Stock</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function LeadsByStatusCard() {
+  const { supabase } = await getViewer();
+  const leadsByStatus = await getLeadsByStatus(supabase);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Leads by Status</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {Object.keys(leadsByStatus).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No leads found</p>
+        ) : (
+          <div className="divide-y">
+            {Object.entries(leadsByStatus)
+              .sort((a, b) => b[1] - a[1])
+              .map(([status, count]) => (
+                <div key={status} className="flex items-center justify-between py-3">
+                  <span className="text-sm font-medium">{status}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">{count}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+async function RepWorkloadCard() {
+  const { supabase } = await getViewer();
+  const repWorkload = await getRepWorkload(supabase);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Rep Workload</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {repWorkload.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No reps found</p>
+        ) : (
+          <div className="divide-y">
+            {repWorkload.map((rep) => (
+              <div key={rep.rep_id} className="flex items-center justify-between py-3">
+                <span className="text-sm font-medium">
+                  {rep.rep_name || rep.rep_id.substring(0, 8)}
+                </span>
+                <span className="text-sm tabular-nums text-muted-foreground">{rep.lead_count} leads</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CardListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-32" />
+      </CardHeader>
+      <CardContent>
+        <div className="divide-y">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between py-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StockCardSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-32" />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-1">
+              <Skeleton className="h-7 w-12" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full" />
+      </CardContent>
+    </Card>
+  );
 }
 
 export default async function DashboardPage() {
-  const userRole = await getCurrentUserRole();
+  const { supabase, user, userRole } = await getViewer();
 
   if (userRole === 'rep') {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const myLeadsCount = user ? await getRepLeadsCount(user.id) : 0;
+    const myLeadsCount = user ? await getRepLeadsCount(supabase, user.id) : 0;
 
     return (
       <div className="space-y-6">
@@ -243,142 +353,24 @@ export default async function DashboardPage() {
     );
   }
 
-  const [
-    totalLeads,
-    leadsLast7Days,
-    unassignedLeads,
-    leadsByStatus,
-    staleLeads,
-    repWorkload,
-    stockSummary,
-  ] = await Promise.all([
-    getTotalLeads(),
-    getLeadsLast7Days(),
-    getUnassignedLeads(),
-    getLeadsByStatus(),
-    getStaleLeads(),
-    getRepWorkload(),
-    getStockSummary(),
-  ]);
-
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Overview and statistics" />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">{totalLeads}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last 7 Days</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">{leadsLast7Days}</div>
-            <p className="text-xs text-muted-foreground">New leads</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unassigned</CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">{unassignedLeads}</div>
-            <p className="text-xs text-muted-foreground">Need assignment</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stale Leads</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight text-destructive">{staleLeads}</div>
-            <p className="text-xs text-muted-foreground">No update in 48h+</p>
-          </CardContent>
-        </Card>
-      </div>
+
+      <Suspense fallback={<StatsCardsSkeleton />}>
+        <StatsCards />
+      </Suspense>
+
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Stock Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <div className="text-2xl font-semibold tracking-tight">{stockSummary.total_materials}</div>
-                <p className="text-xs text-muted-foreground">Materials</p>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold tracking-tight">{stockSummary.low_count}</div>
-                <p className="text-xs text-muted-foreground">Low</p>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold tracking-tight text-destructive">{stockSummary.critical_count}</div>
-                <p className="text-xs text-muted-foreground">Critical</p>
-              </div>
-            </div>
-            <Button asChild className="min-h-[44px]">
-              <Link href="/stock">Open Stock</Link>
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Leads by Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {Object.keys(leadsByStatus).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No leads found</p>
-            ) : (
-              <div className="divide-y">
-                {Object.entries(leadsByStatus)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([status, count]) => (
-                    <div
-                      key={status}
-                      className="flex items-center justify-between py-3"
-                    >
-                      <span className="text-sm font-medium">{status}</span>
-                      <span className="text-sm tabular-nums text-muted-foreground">{count}</span>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Rep Workload</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {repWorkload.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No reps found</p>
-            ) : (
-              <div className="divide-y">
-                {repWorkload.map((rep) => (
-                  <div
-                    key={rep.rep_id}
-                    className="flex items-center justify-between py-3"
-                  >
-                    <span className="text-sm font-medium">
-                      {rep.rep_name || rep.rep_id.substring(0, 8)}
-                    </span>
-                    <span className="text-sm tabular-nums text-muted-foreground">{rep.lead_count} leads</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <Suspense fallback={<StockCardSkeleton />}>
+          <StockSummaryCard />
+        </Suspense>
+        <Suspense fallback={<CardListSkeleton rows={6} />}>
+          <LeadsByStatusCard />
+        </Suspense>
+        <Suspense fallback={<CardListSkeleton rows={4} />}>
+          <RepWorkloadCard />
+        </Suspense>
       </div>
     </div>
   );

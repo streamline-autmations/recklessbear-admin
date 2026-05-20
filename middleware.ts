@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/**
+ * Lightweight middleware: uses cookie-based session check for routing
+ * decisions only. Real authorization is enforced by RLS + server components
+ * calling supabase.auth.getUser(). Avoiding the network round-trip to
+ * Supabase Auth on every navigation is a significant perf win.
+ */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -17,7 +23,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           response = NextResponse.next({
@@ -33,26 +39,30 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Cookie-only session check — no network round-trip to Supabase Auth
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const hasSession = !!session;
 
   const pathname = request.nextUrl.pathname;
   const isRoot = pathname === "/";
   const isLoginPage = pathname === "/login";
-  // Route group (app) doesn't appear in URL, so check actual routes
-  const isProtectedRoute = pathname.startsWith("/dashboard") || 
-                           pathname.startsWith("/leads") ||
-                           pathname.startsWith("/users") ||
-                           pathname.startsWith("/settings");
+  const isProtectedRoute =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/leads") ||
+    pathname.startsWith("/jobs") ||
+    pathname.startsWith("/stock") ||
+    pathname.startsWith("/inbox") ||
+    pathname.startsWith("/analytics") ||
+    pathname.startsWith("/users") ||
+    pathname.startsWith("/settings");
 
-  // Handle root route: redirect to /leads if logged in, else /login
   if (isRoot) {
-    return NextResponse.redirect(new URL(user ? "/leads" : "/login", request.url));
+    return NextResponse.redirect(new URL(hasSession ? "/leads" : "/login", request.url));
   }
 
-  // If logged in and visiting /login, redirect to leads
-  if (user && isLoginPage) {
+  if (hasSession && isLoginPage) {
     const mode = request.nextUrl.searchParams.get("mode");
     if (mode === "set-password") {
       return response;
@@ -60,8 +70,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/leads", request.url));
   }
 
-  // If not logged in and trying to access protected route, redirect to login
-  if (!user && isProtectedRoute) {
+  if (!hasSession && isProtectedRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

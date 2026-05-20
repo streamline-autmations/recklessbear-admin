@@ -1,5 +1,4 @@
 import { InventoryTableClient } from "./inventory-table-client";
-import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import type { MaterialInventory, ProductMaterialUsage, StockMovement, StockTransaction, StockTransactionLineItem } from "@/types/stock";
@@ -10,18 +9,15 @@ import { MovementsLogClient } from "./movements-log-client";
 import { Button } from "@/components/ui/button";
 import { BomTableClient } from "./bom/bom-table-client";
 import { OrdersClient } from "./orders/orders-client";
+import { getViewer } from "@/lib/viewer";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const dynamic = "force-dynamic";
+type ServerSupabase = SupabaseClient;
 
-// Cache timeout in seconds - reduce this for more frequent updates
-// But keep it reasonable to avoid too many DB calls
-const CACHE_TIMEOUT = 60; // 60 seconds for stock data
-
-async function getMaterials(): Promise<MaterialInventory[]> {
-  const supabase = await createClient();
+async function getMaterials(supabase: ServerSupabase): Promise<MaterialInventory[]> {
   const { data, error } = await supabase
     .from("materials_inventory")
-    .select("*")
+    .select("id, name, unit, qty_on_hand, minimum_level, restock_threshold, supplier, updated_at, low_alert_sent_at, critical_alert_sent_at")
     .order("name");
 
   if (error) {
@@ -29,21 +25,19 @@ async function getMaterials(): Promise<MaterialInventory[]> {
     return [];
   }
 
-  return data || [];
+  return (data || []) as unknown as MaterialInventory[];
 }
 
-async function getRecentTransactions(): Promise<
-  Array<
-    StockTransaction & {
-      line_items: Array<
-        StockTransactionLineItem & {
-          material?: { name: string; unit: string } | null;
-        }
-      >;
+type StockTxRow = StockTransaction & {
+  reference_id: string | null;
+  line_items: Array<
+    StockTransactionLineItem & {
+      material?: { name: string; unit: string } | null;
     }
-  >
-> {
-  const supabase = await createClient();
+  >;
+};
+
+async function getRecentTransactions(supabase: ServerSupabase): Promise<StockTxRow[]> {
   const { data, error } = await supabase
     .from("stock_transactions")
     .select(
@@ -71,25 +65,13 @@ async function getRecentTransactions(): Promise<
     return [];
   }
 
-  type RawTransaction = StockTransaction & {
-    reference_id: string | null;
-    line_items: Array<
-      StockTransactionLineItem & {
-        material?: { name: string; unit: string } | null;
-      }
-    >;
-  };
-
-  const normalized: Array<StockTransaction & { line_items: RawTransaction["line_items"] }> = ((data || []) as unknown as RawTransaction[]).map((t) => ({
+  return ((data || []) as unknown as StockTxRow[]).map((t) => ({
     ...t,
     reference: t.reference ?? t.reference_id ?? null,
   }));
-
-  return normalized;
 }
 
-async function getConsumedThisMonth(): Promise<Array<Pick<StockMovement, "material_id" | "delta_qty">>> {
-  const supabase = await createClient();
+async function getConsumedThisMonth(supabase: ServerSupabase): Promise<Array<Pick<StockMovement, "material_id" | "delta_qty">>> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -107,8 +89,7 @@ async function getConsumedThisMonth(): Promise<Array<Pick<StockMovement, "materi
   return (data || []) as Array<Pick<StockMovement, "material_id" | "delta_qty">>;
 }
 
-async function getBomRows(): Promise<ProductMaterialUsage[]> {
-  const supabase = await createClient();
+async function getBomRows(supabase: ServerSupabase): Promise<ProductMaterialUsage[]> {
   const { data, error } = await supabase
     .from("product_material_usage")
     .select(
@@ -128,15 +109,6 @@ async function getBomRows(): Promise<ProductMaterialUsage[]> {
   return data as unknown as ProductMaterialUsage[];
 }
 
-type OrdersTxRow = StockTransaction & {
-  reference_id: string | null;
-  line_items: Array<
-    StockTransactionLineItem & {
-      material?: { name: string; unit: string } | null;
-    }
-  >;
-};
-
 type OrdersJobRow = {
   id: string;
   lead_id: string;
@@ -146,8 +118,7 @@ type OrdersJobRow = {
   created_at: string;
 };
 
-async function getOrders(): Promise<OrdersTxRow[]> {
-  const supabase = await createClient();
+async function getOrders(supabase: ServerSupabase): Promise<StockTxRow[]> {
   const { data, error } = await supabase
     .from("stock_transactions")
     .select(
@@ -176,14 +147,13 @@ async function getOrders(): Promise<OrdersTxRow[]> {
     return [];
   }
 
-  return (data || []) as unknown as OrdersTxRow[];
+  return (data || []) as unknown as StockTxRow[];
 }
 
-async function getJobsByIds(ids: string[]): Promise<Record<string, OrdersJobRow>> {
+async function getJobsByIds(supabase: ServerSupabase, ids: string[]): Promise<Record<string, OrdersJobRow>> {
   const unique = Array.from(new Set(ids.filter(Boolean)));
   if (unique.length === 0) return {};
 
-  const supabase = await createClient();
   const { data, error } = await supabase
     .from("jobs")
     .select("id, lead_id, invoice_number, production_stage, product_list, created_at")
@@ -197,12 +167,14 @@ async function getJobsByIds(ids: string[]): Promise<Record<string, OrdersJobRow>
   return map;
 }
 
-async function getLeadById(leadIds: string[]): Promise<Record<string, { leadCode: string; displayName: string }>> {
+async function getLeadsByIds(supabase: ServerSupabase, leadIds: string[]): Promise<Record<string, { leadCode: string; displayName: string }>> {
   const unique = Array.from(new Set(leadIds.filter(Boolean)));
   if (unique.length === 0) return {};
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("leads").select("id, lead_id, customer_name, name, organization").in("id", unique);
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, lead_id, customer_name, name, organization")
+    .in("id", unique);
   if (error || !data) return {};
 
   const map: Record<string, { leadCode: string; displayName: string }> = {};
@@ -222,8 +194,7 @@ type ManualAdjustmentLogItem = {
   created_by_name: string | null;
 };
 
-async function getManualAdjustmentLog(): Promise<ManualAdjustmentLogItem[]> {
-  const supabase = await createClient();
+async function getManualAdjustmentLog(supabase: ServerSupabase): Promise<ManualAdjustmentLogItem[]> {
   const { data, error } = await supabase
     .from("stock_movements")
     .select("id, delta_qty, notes, created_at, created_by, material:materials_inventory(name, unit)")
@@ -249,8 +220,11 @@ async function getManualAdjustmentLog(): Promise<ManualAdjustmentLogItem[]> {
   const userMap = new Map<string, string>();
 
   if (userIds.length > 0) {
-    const { data: profiles, error: pErr } = await supabase.from("profiles").select("user_id, full_name").in("user_id", userIds);
-    if (!pErr && profiles) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", userIds);
+    if (profiles) {
       for (const p of profiles as unknown as Array<{ user_id: string; full_name: string | null }>) {
         userMap.set(p.user_id, p.full_name || p.user_id.substring(0, 8));
       }
@@ -264,8 +238,8 @@ async function getManualAdjustmentLog(): Promise<ManualAdjustmentLogItem[]> {
 }
 
 export default async function StockPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user, userRole } = await getViewer();
+
   if (!user) {
     return (
       <div className="p-8 text-center">
@@ -275,22 +249,24 @@ export default async function StockPage() {
     );
   }
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", user.id).single();
-  const isAdmin = !!profile && (profile.role === "ceo" || profile.role === "admin");
+  const isAdmin = userRole === "ceo" || userRole === "admin";
 
-  const [materials, transactions, consumedThisMonth, manualAdjustments] = await Promise.all([
-    getMaterials(),
-    getRecentTransactions(),
-    getConsumedThisMonth(),
-    getManualAdjustmentLog(),
+  const [materials, transactions, consumedThisMonth, manualAdjustments, bomRows, orders] = await Promise.all([
+    getMaterials(supabase),
+    getRecentTransactions(supabase),
+    getConsumedThisMonth(supabase),
+    getManualAdjustmentLog(supabase),
+    isAdmin ? getBomRows(supabase) : Promise.resolve([] as ProductMaterialUsage[]),
+    isAdmin ? getOrders(supabase) : Promise.resolve([] as StockTxRow[]),
   ]);
-  const [bomRows, orders] = isAdmin ? await Promise.all([getBomRows(), getOrders()]) : [[], []];
+
   const ordersJobIds = isAdmin ? orders.map((t) => t.reference || t.reference_id || "").filter(Boolean) : [];
-  const jobsById = isAdmin ? await getJobsByIds(ordersJobIds) : {};
+  const jobsById = isAdmin ? await getJobsByIds(supabase, ordersJobIds) : {};
   const leadIds = isAdmin ? Object.values(jobsById).map((j) => j.lead_id).filter(Boolean) : [];
-  const leadById = isAdmin ? await getLeadById(leadIds) : {};
+  const leadById = isAdmin ? await getLeadsByIds(supabase, leadIds) : {};
+
   const showTestHelpers = process.env.NEXT_PUBLIC_ENABLE_TEST_HELPERS === "true";
-  
+
   const lowStockCount = materials.filter((m) => m.qty_on_hand <= m.minimum_level).length;
   const needsRestockCount = materials.filter((m) => m.qty_on_hand <= m.restock_threshold).length;
 
