@@ -33,6 +33,12 @@ yarn-error.log*
 .env*.local
 .env
 
+# mcp config (contains personal access tokens)
+.mcp.json
+
+# kilo (local AI tool workspace, includes node_modules)
+.kilo/
+
 # vercel
 .vercel
 
