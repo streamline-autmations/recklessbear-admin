@@ -7,7 +7,7 @@ function configureWebPush() {
   if (configured) return;
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || "mailto:christian@streamline-automations.agency";
+  const subject = process.env.VAPID_SUBJECT || "mailto:streamline.automations.hq@gmail.com";
   if (!publicKey || !privateKey) {
     throw new Error("VAPID keys are not configured");
   }
