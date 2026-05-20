@@ -17,6 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationsToggle } from "@/components/notifications-toggle";
+import { NotificationsPrompt } from "@/components/notifications-prompt";
 import { useTheme } from "next-themes";
 
 const navigation = [
@@ -247,6 +249,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationsToggle />
             <ThemeToggle />
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -272,6 +275,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
           </div>
         </header>
 
+        <NotificationsPrompt />
         <main className="p-4 md:p-6 flex-1 overflow-auto">
           <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
