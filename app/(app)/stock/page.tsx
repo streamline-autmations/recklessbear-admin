@@ -13,6 +13,10 @@ import { OrdersClient } from "./orders/orders-client";
 
 export const dynamic = "force-dynamic";
 
+// Cache timeout in seconds - reduce this for more frequent updates
+// But keep it reasonable to avoid too many DB calls
+const CACHE_TIMEOUT = 60; // 60 seconds for stock data
+
 async function getMaterials(): Promise<MaterialInventory[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

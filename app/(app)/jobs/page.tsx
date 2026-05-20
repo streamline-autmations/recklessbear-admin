@@ -38,9 +38,10 @@ async function getJobsBoardLeads(): Promise<Lead[]> {
       card_created
     `)
     // Filter for jobs: sales_status is Quote Approved OR card_created is true OR production_stage is set
+    // Limit to 100 for performance, use pagination for more
     .or('sales_status.eq.Quote Approved,sales_status.eq.In Production,sales_status.eq.Completed,card_created.eq.true,production_stage.neq.null')
     .order('updated_at', { ascending: false, nullsFirst: false })
-    .limit(2000)
+    .limit(100)
   
   const { data: leadsData, error } = await query;
 

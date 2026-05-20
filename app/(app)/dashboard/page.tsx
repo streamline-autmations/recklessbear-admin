@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/page-header';
 import { AlertTriangle, TrendingUp, UserPlus, Users } from 'lucide-react';
 
+// Cache for dashboard stats - revalidate every 30 seconds
+// This significantly improves page load speed by caching database queries
+export const revalidate = 30;
+
 async function getCurrentUserRole(): Promise<string | null> {
   const supabase = await createClient();
 
