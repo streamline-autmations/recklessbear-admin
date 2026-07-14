@@ -428,6 +428,29 @@ export function LeadDetailClient({
     return trimmed ? trimmed : null;
   })();
 
+  // Booking/question values with JSONB fallbacks — the strict /api/leads ingest
+  // schema can only write booking_data/question_data blobs (not the top-level
+  // columns), so mirror the quote-tab fallback pattern for chatbot-originated leads.
+  const bookingData = (lead.booking_data as Record<string, unknown> | null) || null;
+  const bookingTimeValue = getQuoteValueFallback(
+    lead.booking_time,
+    bookingData?.["booking_time"] as string | null,
+  );
+  const preCallNotesValue = getQuoteValueFallback(
+    lead.pre_call_notes,
+    bookingData?.["pre_call_notes"] as string | null,
+    bookingData?.["booking_notes"] as string | null,
+    bookingData?.["notes"] as string | null,
+  );
+  const bookingApprovedValue = getQuoteValueFallback(
+    lead.booking_approved,
+    bookingData?.["booking_approved"] as string | null,
+  );
+  const questionValue = getQuoteValueFallback(
+    lead.question,
+    (lead.question_data as Record<string, unknown> | null)?.["question"] as string | null,
+  );
+
   const isDbLead = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lead.id || "");
   const canEditQuote = isCeoOrAdmin && isDbLead;
 
@@ -1619,27 +1642,27 @@ export function LeadDetailClient({
 
         {/* Booking Tab */}
         <TabsContent value="booking" className="space-y-4">
-          {(lead.has_booked_call || lead.booking_data || lead.booking_time) ? (
+          {(lead.has_booked_call || lead.booking_data || bookingTimeValue) ? (
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-semibold mb-4">Booking</h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  {lead.booking_approved && (
+                  {bookingApprovedValue && (
                     <div>
                       <p className="text-sm font-medium mb-1">Booking Approved</p>
-                      <p className="text-sm text-muted-foreground">{lead.booking_approved}</p>
+                      <p className="text-sm text-muted-foreground">{bookingApprovedValue}</p>
                     </div>
                   )}
-                  {lead.booking_time && (
+                  {bookingTimeValue && (
                     <div>
                       <p className="text-sm font-medium mb-1">Booking Time</p>
-                      <p className="text-sm text-muted-foreground">{formatDateSafe(lead.booking_time)}</p>
+                      <p className="text-sm text-muted-foreground">{formatDateSafe(bookingTimeValue)}</p>
                     </div>
                   )}
-                  {lead.pre_call_notes && (
+                  {preCallNotesValue && (
                     <div className="md:col-span-2">
                       <p className="text-sm font-medium mb-1">Pre-call Notes</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.pre_call_notes}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{preCallNotesValue}</p>
                     </div>
                   )}
                 </div>
@@ -1656,7 +1679,7 @@ export function LeadDetailClient({
 
         {/* Question Tab */}
         <TabsContent value="question" className="space-y-4">
-          {(lead.has_asked_question || lead.question || questionTopic) ? (
+          {(lead.has_asked_question || questionValue || questionTopic) ? (
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-semibold mb-4">Question Details</h3>
@@ -1670,11 +1693,11 @@ export function LeadDetailClient({
                     </div>
                   )}
 
-                  {lead.question && (
+                  {questionValue && (
                     <div>
                       <p className="text-sm font-medium mb-2">Question</p>
                       <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg border">
-                        {lead.question}
+                        {questionValue}
                       </div>
                     </div>
                   )}

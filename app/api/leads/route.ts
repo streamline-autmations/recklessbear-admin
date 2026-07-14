@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
   const { data: upserted, error: upsertError } = await supabase
     .from("leads")
     .upsert(update, { onConflict: "lead_id", ignoreDuplicates: false })
-    .select("id, lead_id, customer_name, email, phone, organization, status, assigned_rep_id, created_at, updated_at, has_booked_call, has_asked_question, has_requested_quote")
+    .select("id, lead_id, customer_name, email, phone, organization, status, assigned_rep_id, created_at, updated_at, has_booked_call, has_asked_question, has_requested_quote, quote_data, booking_data, question_data")
     .single();
 
   if (upsertError || !upserted) {
@@ -146,6 +146,16 @@ export async function POST(request: NextRequest) {
     else if (upserted.has_booked_call) leadType = "call";
     else if (upserted.has_asked_question) leadType = "question";
 
+    // Flatten the JSONB blobs so downstream n8n / WhatsApp templates can read
+    // the intent detail without re-querying Supabase (works for every lead source).
+    const qd = (isPlainRecord(upserted.quote_data) ? upserted.quote_data : {}) as Record<string, unknown>;
+    const bd = (isPlainRecord(upserted.booking_data) ? upserted.booking_data : {}) as Record<string, unknown>;
+    const nd = (isPlainRecord(upserted.question_data) ? upserted.question_data : {}) as Record<string, unknown>;
+    const firstString = (...vals: unknown[]): string | null => {
+      for (const v of vals) if (typeof v === "string" && v.trim()) return v.trim();
+      return null;
+    };
+
     // Construct flat payload matching user request
     const payload = {
       email: upserted.email || null,
@@ -161,7 +171,19 @@ export async function POST(request: NextRequest) {
       has_booked_call: upserted.has_booked_call || false,
       has_asked_question: upserted.has_asked_question || false,
       has_requested_quote: upserted.has_requested_quote || false,
-      
+
+      // Intent detail for WhatsApp templates (flattened from JSONB blobs)
+      category: firstString(qd.category),
+      product_type: firstString(qd.product_type, qd.apparel_interest),
+      quantity_range: firstString(qd.quantity_range, qd.quantity_value, qd.quantity_rough),
+      booking_time: firstString(bd.booking_time),
+      question: firstString(nd.question),
+
+      // Full JSONB blobs (for any additional mapping in n8n)
+      quote_data: isPlainRecord(upserted.quote_data) ? upserted.quote_data : null,
+      booking_data: isPlainRecord(upserted.booking_data) ? upserted.booking_data : null,
+      question_data: isPlainRecord(upserted.question_data) ? upserted.question_data : null,
+
       // Metadata fields from original request
       webhookUrl: webhookUrl,
       executionMode: process.env.NODE_ENV === "production" ? "production" : "development"
