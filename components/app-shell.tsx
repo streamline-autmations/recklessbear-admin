@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, MessageSquare, BarChart3, Briefcase, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users as UsersIcon, Menu, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsToggle } from "@/components/notifications-toggle";
@@ -24,10 +24,6 @@ import { useTheme } from "next-themes";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/leads", icon: UsersIcon },
-  { name: "Jobs", href: "/jobs", icon: Briefcase },
-  { name: "Stock", href: "/stock", icon: Package },
-  { name: "RecklessBear WhatsApp", href: "/inbox", icon: MessageSquare },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Users", href: "/users", icon: ShieldCheck },
 ];
 
@@ -100,7 +96,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
   const renderNav = (mobile?: boolean) => {
     const isCeoOrAdmin = userRole === "ceo" || userRole === "admin";
     const visibleNav = navigation.filter((item) => {
-      if (item.href === "/users" || item.href === "/analytics") {
+      if (item.href === "/users") {
         return isCeoOrAdmin;
       }
       return true;
@@ -119,13 +115,7 @@ export function AppShell({ children, userName, userRole }: AppShellProps) {
               onClick={() => {
                 if (mobile) setIsSheetOpen(false);
               }}
-              data-tour={
-                item.href === "/leads"
-                  ? "sidebar-leads"
-                  : item.href === "/jobs"
-                    ? "sidebar-jobs"
-                    : undefined
-              }
+              data-tour={item.href === "/leads" ? "sidebar-leads" : undefined}
               title={collapsed ? item.name : undefined}
               aria-label={collapsed ? item.name : undefined}
               aria-current={isActive ? "page" : undefined}

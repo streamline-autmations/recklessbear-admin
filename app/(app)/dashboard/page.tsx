@@ -68,35 +68,6 @@ async function getLeadsByStatus(supabase: ServerSupabase): Promise<Record<string
   return counts;
 }
 
-type StockSummary = {
-  total_materials: number;
-  low_count: number;
-  critical_count: number;
-};
-
-async function getStockSummary(supabase: ServerSupabase): Promise<StockSummary> {
-  const { data, error } = await supabase
-    .from('materials_inventory')
-    .select('qty_on_hand, minimum_level, restock_threshold');
-
-  if (error || !data) {
-    return { total_materials: 0, low_count: 0, critical_count: 0 };
-  }
-
-  let low = 0;
-  let critical = 0;
-  for (const row of data) {
-    const r = row as { qty_on_hand?: unknown; minimum_level?: unknown; restock_threshold?: unknown };
-    const qty = Number(r.qty_on_hand ?? 0);
-    const min = Number(r.minimum_level ?? 0);
-    const restock = Number(r.restock_threshold ?? 0);
-    if (qty <= min) critical += 1;
-    else if (qty <= restock) low += 1;
-  }
-
-  return { total_materials: data.length, low_count: low, critical_count: critical };
-}
-
 interface RepWorkload {
   rep_id: string;
   rep_name: string | null;
@@ -198,37 +169,6 @@ function StatsCardsSkeleton() {
   );
 }
 
-async function StockSummaryCard() {
-  const { supabase } = await getViewer();
-  const stockSummary = await getStockSummary(supabase);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Stock Summary</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <div className="text-2xl font-semibold tracking-tight">{stockSummary.total_materials}</div>
-            <p className="text-xs text-muted-foreground">Materials</p>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tracking-tight">{stockSummary.low_count}</div>
-            <p className="text-xs text-muted-foreground">Low</p>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tracking-tight text-destructive">{stockSummary.critical_count}</div>
-            <p className="text-xs text-muted-foreground">Critical</p>
-          </div>
-        </div>
-        <Button asChild className="min-h-[44px]">
-          <Link href="/stock">Open Stock</Link>
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 async function LeadsByStatusCard() {
   const { supabase } = await getViewer();
   const leadsByStatus = await getLeadsByStatus(supabase);
@@ -305,27 +245,6 @@ function CardListSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-function StockCardSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-32" />
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="space-y-1">
-              <Skeleton className="h-7 w-12" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-          ))}
-        </div>
-        <Skeleton className="h-10 w-full" />
-      </CardContent>
-    </Card>
-  );
-}
-
 export default async function DashboardPage() {
   const { supabase, user, userRole } = await getViewer();
 
@@ -362,9 +281,6 @@ export default async function DashboardPage() {
       </Suspense>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Suspense fallback={<StockCardSkeleton />}>
-          <StockSummaryCard />
-        </Suspense>
         <Suspense fallback={<CardListSkeleton rows={6} />}>
           <LeadsByStatusCard />
         </Suspense>

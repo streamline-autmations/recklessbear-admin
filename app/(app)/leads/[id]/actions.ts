@@ -19,7 +19,7 @@ const deleteNoteSchema = z.object({
 
 const changeStatusSchema = z.object({
   leadId: z.string().uuid(),
-  status: z.enum(["New", "Assigned", "Contacted", "Quote Sent", "Quote Approved", "In Production", "Completed", "Lost"]),
+  status: z.enum(["New", "Assigned", "Contacted", "Quote Sent", "Quote Approved", "In Production", "Completed", "Lost", "Answered"]),
 });
 
 const assignRepSchema = z.object({

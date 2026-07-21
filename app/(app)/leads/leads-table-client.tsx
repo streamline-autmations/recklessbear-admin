@@ -115,57 +115,24 @@ function buildIntents(lead: DisplayLead): string[] {
   );
 }
 
-type FocusTab = "all" | "needs_action" | "unassigned" | "in_progress" | "in_production";
-
-type NextActionLabel =
-  | "Needs Contact"
-  | "Waiting on Client"
-  | "Ready for Production"
-  | "In Production";
+type FocusTab = "needs_attention" | "answered";
 
 function normalizeStatus(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
-function getNextActionLabel(lead: DisplayLead): NextActionLabel {
-  const status = normalizeStatus(lead.status);
-  const salesStatus = normalizeStatus(lead.sales_status);
-
-  const inProduction = status === "in production" || !!lead.production_stage || salesStatus === "in production";
-  if (inProduction) return "In Production";
-
-  const quoteApproved = status === "quote approved" || salesStatus === "quote approved";
-  if (quoteApproved) return "Ready for Production";
-
-  if (status === "quote sent" || status === "contacted") return "Waiting on Client";
-
-  return "Needs Contact";
+function isAnswered(lead: DisplayLead): boolean {
+  return normalizeStatus(lead.status) === "answered";
 }
 
 function matchesFocusTab(lead: DisplayLead, tab: FocusTab): boolean {
-  if (tab === "all") return true;
-  if (tab === "unassigned") return !lead.assigned_rep_id;
-
-  const nextAction = getNextActionLabel(lead);
-
-  if (tab === "needs_action") {
-    if (!lead.assigned_rep_id) return false;
-    return nextAction === "Needs Contact" || nextAction === "Ready for Production";
-  }
-
-  if (tab === "in_progress") {
-    if (!lead.assigned_rep_id) return false;
-    return nextAction === "Waiting on Client";
-  }
-
-  return nextAction === "In Production";
+  return tab === "answered" ? isAnswered(lead) : !isAnswered(lead);
 }
 
-function nextActionPillClass(label: NextActionLabel): string {
-  if (label === "Needs Contact") return "bg-primary/10 text-primary border-primary/20";
-  if (label === "Ready for Production") return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
-  if (label === "In Production") return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
-  return "bg-muted text-muted-foreground border-border";
+function attentionPillClass(answered: boolean): string {
+  return answered
+    ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
+    : "bg-primary/10 text-primary border-primary/20";
 }
 
 function isUuid(value: string | null | undefined): boolean {
@@ -184,7 +151,7 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
   const [assignedRepFilter, setAssignedRepFilter] = useState<string>(searchParams.get("rep") || "all");
   const [sortBy, setSortBy] = useState<"updated" | "submitted">("updated");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [focusTab, setFocusTab] = useState<FocusTab>("needs_action");
+  const [focusTab, setFocusTab] = useState<FocusTab>("needs_attention");
   const [assignOpenLeadKey, setAssignOpenLeadKey] = useState<string | null>(null);
   const [assignSelectedRepId, setAssignSelectedRepId] = useState<string>("");
   const [isAssignPending, startAssignTransition] = useTransition();
@@ -419,11 +386,8 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
 
   const FocusTabs = () => {
     const tabs: Array<{ value: FocusTab; label: string }> = [
-      { value: "all", label: "All" },
-      { value: "needs_action", label: "Needs Action" },
-      { value: "unassigned", label: "Unassigned" },
-      { value: "in_progress", label: "In Progress" },
-      { value: "in_production", label: "In Production" },
+      { value: "needs_attention", label: "Needs Attention" },
+      { value: "answered", label: "Answered" },
     ];
 
     return (
@@ -498,7 +462,7 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
 
   const LeadCardRow = ({ lead }: { lead: DisplayLead }) => {
     const leadKey = String(lead.id || lead.lead_id);
-    const nextAction = getNextActionLabel(lead);
+    const answered = isAnswered(lead);
     const intents = buildIntents(lead);
     const primaryIntent = intents[0] || null;
     const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
@@ -524,8 +488,8 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
               </div>
               <p className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">{companyLabel}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
-                  {nextAction}
+                <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", attentionPillClass(answered)].join(" ")}>
+                  {answered ? "Answered" : "Needs Attention"}
                 </span>
                 <span className="text-[11px] sm:text-xs text-muted-foreground">
                   Submitted {formatDate(lead.submission_date || lead.created_at || "")}
@@ -799,11 +763,14 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
                 : "No leads found for the current view."}
               {initialLeads.length > 0 && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {focusTab !== "all" && (
-                    <Button type="button" variant="outline" className="min-h-[36px]" onClick={() => setFocusTab("all")}>
-                      Show all leads
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[36px]"
+                    onClick={() => setFocusTab(focusTab === "needs_attention" ? "answered" : "needs_attention")}
+                  >
+                    {focusTab === "needs_attention" ? "Show answered leads" : "Show leads needing attention"}
+                  </Button>
                   {hasActiveFilters && (
                     <Button type="button" variant="outline" className="min-h-[36px]" onClick={clearFilters}>
                       Clear filters
@@ -833,7 +800,7 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
                             <TableHead>Lead</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Intent</TableHead>
-                            <TableHead>Next</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Rep</TableHead>
                             <TableHead>Submitted</TableHead>
                             <TableHead className="text-right">Action</TableHead>
@@ -841,7 +808,7 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
                         </TableHeader>
                         <TableBody>
                           {focusFilteredLeads.map((lead) => {
-                            const nextAction = getNextActionLabel(lead);
+                            const answered = isAnswered(lead);
                             const intents = buildIntents(lead);
                             const repName = lead.assigned_rep_name || getRepName(lead, reps) || "—";
                             const companyLabel = (lead.organization && lead.organization.trim()) ? lead.organization : (lead.lead_id || "—");
@@ -866,8 +833,8 @@ function LeadsTableClientContent({ initialLeads, reps, currentUserId, isCeoOrAdm
                                   )}
                                 </TableCell>
                                 <TableCell>
-                                  <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", nextActionPillClass(nextAction)].join(" ")}>
-                                    {nextAction}
+                                  <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", attentionPillClass(answered)].join(" ")}>
+                                    {answered ? "Answered" : "Needs Attention"}
                                   </span>
                                 </TableCell>
                                 <TableCell className="max-w-[180px] truncate">{repName}</TableCell>

@@ -22,14 +22,11 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { addNoteAction, deleteNoteAction, changeStatusAction, assignRepAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
-import StatusBadge from "@/components/status-badge";
+import { addNoteAction, deleteNoteAction, changeStatusAction, updateDesignNotesAction, updateLeadFieldsAction } from "./actions";
 import { AttachmentGallery } from "./attachment-gallery";
-import { LeadQuickActions } from "./lead-quick-actions";
 import type { Lead } from "@/types/leads";
 import { Separator } from "@/components/ui/separator";
 import { ExternalLink, Pencil, Trash2, Plus, ArrowUp, ArrowDown, RotateCcw, Copy } from "lucide-react";
-import { assignToMeAction } from "../actions";
 import { getTrelloCardUrl, TRELLO_LISTS } from "@/lib/trello";
 import { renderTrelloCardDescription } from "@/lib/trello-card-template";
 import { TrelloProductListEditor } from "./trello-product-list-editor";
@@ -114,27 +111,18 @@ export function LeadDetailClient({
   notes,
   events,
   isCeoOrAdmin,
-  reps,
   job,
 }: LeadDetailClientProps) {
   const router = useRouter();
   const [noteText, setNoteText] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(initialStatus);
-  const [selectedRepId, setSelectedRepId] = useState<string>(lead.assigned_rep_id || "__unassigned__");
   const [noteError, setNoteError] = useState<string | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [repError, setRepError] = useState<string | null>(null);
   const [designNotes, setDesignNotes] = useState(lead.design_notes || "");
   const [isNotePending, startNoteTransition] = useTransition();
   const [isDeleteNotePending, startDeleteNoteTransition] = useTransition();
   const [pendingDeleteNoteId, setPendingDeleteNoteId] = useState<string | null>(null);
   const [isStatusPending, startStatusTransition] = useTransition();
-  const [isRepPending, startRepTransition] = useTransition();
   const [isDesignNotesPending, startDesignNotesTransition] = useTransition();
-  const [bannerNoteOpen, setBannerNoteOpen] = useState(false);
-  const [bannerNote, setBannerNote] = useState("");
-  const [isBannerPending, startBannerTransition] = useTransition();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [trelloPreviewOpen, setTrelloPreviewOpen] = useState(false);
   const [trelloJobId, setTrelloJobId] = useState("");
@@ -780,38 +768,16 @@ export function LeadDetailClient({
 
   function handleStatusChange(newStatus: string) {
     setSelectedStatus(newStatus);
-    setStatusError(null);
     const formData = new FormData();
     formData.set("leadId", lead.id || leadId);
     formData.set("status", newStatus);
     startStatusTransition(async () => {
       const result = await changeStatusAction(formData);
       if (result && "error" in result) {
-        setStatusError(result.error);
         setSelectedStatus(initialStatus);
         toast.error(result.error);
       } else {
         toast.success("Status updated successfully");
-        router.refresh();
-      }
-    });
-  }
-
-  function handleAssignRep(newRepId: string) {
-    setSelectedRepId(newRepId);
-    setRepError(null);
-    const formData = new FormData();
-    formData.set("leadId", lead.id || leadId);
-    // Convert "__unassigned__" back to empty string for server
-    formData.set("repId", newRepId === "__unassigned__" ? "" : newRepId);
-    startRepTransition(async () => {
-      const result = await assignRepAction(formData);
-      if (result && "error" in result) {
-        setRepError(result.error);
-        setSelectedRepId(lead.assigned_rep_id || "__unassigned__");
-        toast.error(result.error);
-      } else {
-        toast.success(newRepId === "__unassigned__" ? "Rep unassigned successfully" : "Rep assigned successfully");
         router.refresh();
       }
     });
@@ -825,92 +791,7 @@ export function LeadDetailClient({
     return (value || "").trim().toLowerCase();
   }
 
-  const bannerState = useMemo(() => {
-    const status = normalizeStatus(selectedStatus || lead.status);
-    const salesStatus = normalizeStatus(lead.sales_status);
-    const isUnassigned = !lead.assigned_rep_id;
-    const inProduction = status === "in production" || !!lead.production_stage || salesStatus === "in production";
-    const quoteApproved = status === "quote approved" || salesStatus === "quote approved";
-    const quoteSentOrPending = status === "quote sent" || (lead.has_requested_quote && !quoteApproved);
-    const needsContact = !isUnassigned && (status === "new" || status === "assigned");
-    const trelloUrl = lead.card_id ? getTrelloCardUrl(lead.card_id) : null;
-
-    if (isUnassigned) {
-      return {
-        title: "Next Action",
-        message: "Assign this lead to a rep to start.",
-        kind: "unassigned" as const,
-        trelloUrl,
-      };
-    }
-
-    if (needsContact) {
-      return {
-        title: "Next Action",
-        message: "Contact the customer now.",
-        kind: "needs_contact" as const,
-        trelloUrl,
-      };
-    }
-
-    if (quoteSentOrPending) {
-      return {
-        title: "Next Action",
-        message: "Send or review quote.",
-        kind: "quote" as const,
-        trelloUrl,
-      };
-    }
-
-    if (quoteApproved && !lead.card_id) {
-      return {
-        title: "Next Action",
-        message: "Start production by creating a Trello card.",
-        kind: "ready_for_production" as const,
-        trelloUrl,
-      };
-    }
-
-    if (inProduction) {
-      return {
-        title: "Next Action",
-        message: "Track production stage and update customer if needed.",
-        kind: "in_production" as const,
-        trelloUrl,
-      };
-    }
-
-    return {
-      title: "Next Action",
-      message: "Review the lead and take the next step.",
-      kind: "default" as const,
-      trelloUrl,
-    };
-  }, [lead, selectedStatus]);
-
-  function submitBannerNote() {
-    if (!canUseDbActions()) {
-      toast.error("Notes are unavailable for this lead.");
-      return;
-    }
-    const note = bannerNote.trim();
-    if (!note) return;
-
-    startBannerTransition(async () => {
-      const formData = new FormData();
-      formData.set("leadId", lead.id as string);
-      formData.set("note", note);
-      const result = await addNoteAction(formData);
-      if (result && "error" in result) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Note added");
-      setBannerNote("");
-      setBannerNoteOpen(false);
-      router.refresh();
-    });
-  }
+  const isAnswered = normalizeStatus(selectedStatus || lead.status) === "answered";
 
   function createUuidV4(): string {
     const cryptoObj = globalThis.crypto;
@@ -1029,58 +910,8 @@ export function LeadDetailClient({
     }
   }
 
-  function assignLeadToMe() {
-    if (!canUseDbActions()) {
-      toast.error("Assignment is unavailable for this lead.");
-      return;
-    }
-    startBannerTransition(async () => {
-      const formData = new FormData();
-      formData.set("leadId", lead.id as string);
-      const result = await assignToMeAction(formData);
-      if (result && "error" in result) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Lead assigned to you");
-      router.refresh();
-    });
-  }
-
-  function focusRepAssign() {
-    setAdvancedOpen(true);
-    requestAnimationFrame(() => {
-      const el = document.getElementById("rep");
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }
-
   return (
     <div className="space-y-6">
-      <Dialog open={bannerNoteOpen} onOpenChange={setBannerNoteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Note</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Note</Label>
-            <Textarea
-              value={bannerNote}
-              onChange={(e) => setBannerNote(e.target.value)}
-              className="min-h-[160px]"
-            />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setBannerNoteOpen(false)} className="min-h-[44px]">
-              Cancel
-            </Button>
-            <Button type="button" onClick={submitBannerNote} disabled={!bannerNote.trim() || isBannerPending} className="min-h-[44px]">
-              {isBannerPending ? "Saving..." : "Save Note"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={trelloPreviewOpen} onOpenChange={setTrelloPreviewOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] p-0 flex flex-col">
           <div className="px-6 pt-6">
@@ -1903,227 +1734,24 @@ export function LeadDetailClient({
       <Separator />
 
       <div className="space-y-4">
-        <div className="space-y-2">
-          {lead.organization ? (
-            <div className="text-sm text-muted-foreground">{lead.organization}</div>
-          ) : null}
-          <div className="text-xs text-muted-foreground">Lead ID: {lead.lead_id || leadId}</div>
-          {lead.intents && lead.intents.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {lead.intents.map((intent) => (
-                <span
-                  key={intent}
-                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs font-medium"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  {intent}
-                </span>
-              ))}
+        <Card className={isAnswered ? "border-green-500/20 bg-green-500/5" : "border-primary/20 bg-primary/5"}>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div>
+              <p className="text-base font-semibold">{isAnswered ? "Answered" : "Needs Attention"}</p>
+              <p className="text-sm text-muted-foreground">
+                {isAnswered ? "This lead has been answered." : "This lead still needs a response."}
+              </p>
             </div>
-          ) : null}
-        </div>
-
-        <LeadQuickActions
-          phone={lead.phone || null}
-          email={lead.email || null}
-          leadId={lead.lead_id || leadId}
-          dbId={lead.id || undefined}
-          name={lead.customer_name || lead.name || null}
-          cardId={lead.card_id || null}
-          isCeoOrAdmin={isCeoOrAdmin}
-          assignedRepId={lead.assigned_rep_id || null}
-        />
-
-        <Card data-tour="lead-next-action" className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{bannerState.title}</CardTitle>
-            <p className="text-sm text-muted-foreground">{bannerState.message}</p>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-2">
-              {bannerState.kind === "unassigned" ? (
-                !isCeoOrAdmin ? (
-                  <Button type="button" className="min-h-[44px]" onClick={assignLeadToMe} disabled={isBannerPending || !canUseDbActions()}>
-                    {isBannerPending ? "Assigning..." : "Assign to Me"}
-                  </Button>
-                ) : (
-                  <Button type="button" className="min-h-[44px]" onClick={focusRepAssign}>
-                    Assign Rep
-                  </Button>
-                )
-              ) : null}
-
-              {bannerState.kind === "needs_contact" ? (
-                <>
-                  {lead.phone ? (
-                    <Button asChild className="min-h-[44px]">
-                      <a href={`tel:${lead.phone}`}>Call customer</a>
-                    </Button>
-                  ) : lead.email ? (
-                    <Button asChild className="min-h-[44px]">
-                      <a href={`mailto:${lead.email}`}>Email customer</a>
-                    </Button>
-                  ) : (
-                    <Button type="button" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
-                      {isStatusPending ? "Updating..." : "Mark contacted"}
-                    </Button>
-                  )}
-                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => handleStatusChange("Contacted")} disabled={isStatusPending}>
-                    {isStatusPending ? "Updating..." : "Mark contacted"}
-                  </Button>
-                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                    Add note
-                  </Button>
-                </>
-              ) : null}
-
-              {bannerState.kind === "quote" ? (
-                <>
-                  <Button type="button" className="min-h-[44px]" onClick={() => setActiveTab("quote")}>
-                    Open quote details
-                  </Button>
-                  {lead.phone ? (
-                    <Button asChild variant="outline" className="min-h-[44px]">
-                      <a href={`tel:${lead.phone}`}>Call customer</a>
-                    </Button>
-                  ) : lead.email ? (
-                    <Button asChild variant="outline" className="min-h-[44px]">
-                      <a href={`mailto:${lead.email}`}>Email customer</a>
-                    </Button>
-                  ) : null}
-                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                    Add note
-                  </Button>
-                </>
-              ) : null}
-
-              {bannerState.kind === "ready_for_production" ? (
-                isCeoOrAdmin ? (
-                  <Button type="button" className="min-h-[44px]" onClick={openTrelloPreview}>
-                    Preview Trello Card
-                  </Button>
-                ) : (
-                  <Button type="button" className="min-h-[44px]" disabled>
-                    Awaiting admin
-                  </Button>
-                )
-              ) : null}
-
-              {bannerState.kind === "in_production" && bannerState.trelloUrl ? (
-                <>
-                  <Button asChild className="min-h-[44px]">
-                    <a href={bannerState.trelloUrl} target="_blank" rel="noopener noreferrer">
-                      Open Trello card
-                    </a>
-                  </Button>
-                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                    Add note
-                  </Button>
-                </>
-              ) : null}
-
-              {bannerState.kind === "default" ? (
-                <>
-                  {lead.phone ? (
-                    <Button asChild className="min-h-[44px]">
-                      <a href={`tel:${lead.phone}`}>Call customer</a>
-                    </Button>
-                  ) : lead.email ? (
-                    <Button asChild className="min-h-[44px]">
-                      <a href={`mailto:${lead.email}`}>Email customer</a>
-                    </Button>
-                  ) : null}
-                  <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setBannerNoteOpen(true)} disabled={!canUseDbActions()}>
-                    Add note
-                  </Button>
-                </>
-              ) : null}
-            </div>
+            <Button
+              type="button"
+              className="min-h-[44px]"
+              onClick={() => handleStatusChange("Answered")}
+              disabled={isStatusPending || isAnswered}
+            >
+              {isStatusPending ? "Updating..." : isAnswered ? "Answered" : "Mark as answered"}
+            </Button>
           </CardContent>
         </Card>
-
-        <div className="flex items-center justify-between">
-          <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setAdvancedOpen((v) => !v)}>
-            {advancedOpen ? "Hide Advanced" : "Advanced"}
-          </Button>
-        </div>
-
-        {advancedOpen ? (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4 w-full md:w-auto">
-                  <div className="space-y-2 w-full sm:w-auto">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={selectedStatus} onValueChange={handleStatusChange} disabled={isStatusPending}>
-                      <SelectTrigger id="status" className="min-h-[44px] w-full sm:w-[200px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="New">New</SelectItem>
-                        <SelectItem value="Assigned">Assigned</SelectItem>
-                        <SelectItem value="Contacted">Contacted</SelectItem>
-                        <SelectItem value="Quote Sent">Quote Sent</SelectItem>
-                        <SelectItem value="Quote Approved">Quote Approved</SelectItem>
-                        <SelectItem value="In Production">In Production</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                        <SelectItem value="Lost">Lost</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {statusError ? <p className="text-sm text-destructive">{statusError}</p> : null}
-                  </div>
-
-                  <div className="space-y-2 w-full sm:w-auto">
-                    <Label htmlFor="rep">Assigned Rep</Label>
-                    {isCeoOrAdmin ? (
-                      <>
-                        <Select value={selectedRepId} onValueChange={handleAssignRep} disabled={isRepPending}>
-                          <SelectTrigger id="rep" className="min-h-[44px] w-full sm:w-[200px]">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                            {reps.map((rep) => (
-                              <SelectItem key={rep.id} value={rep.id}>
-                                {rep.name || rep.email || rep.id}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {repError ? <p className="text-sm text-destructive">{repError}</p> : null}
-                      </>
-                    ) : (
-                      <div className="flex items-center h-[44px] px-3 border rounded-md bg-muted text-muted-foreground text-sm">
-                        {lead.assigned_rep_name || "Unassigned"}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <StatusBadge
-                    status={
-                      (selectedStatus?.toLowerCase().replace(/\s+/g, "_") || "new") as
-                        | "new"
-                        | "assigned"
-                        | "contacted"
-                        | "quote_sent"
-                        | "quote_approved"
-                        | "in_production"
-                        | "completed"
-                        | "lost"
-                    }
-                  />
-                  {lead.production_stage ? (
-                    <span className="inline-flex items-center rounded-md bg-secondary text-secondary-foreground px-2 py-1 text-xs font-medium border border-border">
-                      {lead.production_stage}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
       </div>
     </div>
   );
