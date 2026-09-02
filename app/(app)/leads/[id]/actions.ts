@@ -113,6 +113,7 @@ export async function addNoteAction(formData: FormData): Promise<{ error?: strin
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function deleteNoteAction(formData: FormData): Promise<{ error?: string } | void> {
@@ -191,6 +192,7 @@ export async function deleteNoteAction(formData: FormData): Promise<{ error?: st
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function changeStatusAction(
@@ -264,6 +266,7 @@ export async function changeStatusAction(
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function assignRepAction(
@@ -342,6 +345,7 @@ export async function assignRepAction(
     });
 
     revalidatePath(`/leads/${result.data.leadId}`);
+    revalidatePath("/leads");
     return;
   }
 
@@ -391,6 +395,7 @@ export async function assignRepAction(
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function updateDesignNotesAction(
@@ -443,6 +448,7 @@ export async function updateDesignNotesAction(
   }
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function updateLeadFieldsAction(
@@ -518,6 +524,7 @@ export async function updateLeadFieldsAction(
   });
 
   revalidatePath(`/leads/${result.data.leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function createTrelloCardAction(

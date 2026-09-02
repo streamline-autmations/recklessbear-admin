@@ -57,3 +57,8 @@ CHATBOT_KNOWLEDGE_BASE.md
 New_lead_alert.n8n
 Untitled-1771220787430.data
 Untitled-1771220787430.n8n
+
+# Internal audit notes / infra exports — contain customer PII and internal endpoints.
+# This repo is PUBLIC. Keep these local.
+LEAD_PIPELINE_AUDIT.md
+n8n/workflows/*.REDACTED.json
